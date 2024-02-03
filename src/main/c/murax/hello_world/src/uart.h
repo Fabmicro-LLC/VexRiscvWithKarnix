@@ -1,6 +1,22 @@
 #ifndef UART_H_
 #define UART_H_
 
+#define UART_PRE_SAMPLING_SIZE	1
+#define UART_SAMPLING_SIZE	3
+#define UART_POST_SAMPLING_SIZE	1
+
+#define UART_PARITY_NONE	0
+#define UART_PARITY_EVEN	1
+#define UART_PARITY_ODD		2
+
+#define UART_STOP_ONE		0
+#define UART_STOP_TWO		1
+
+#define UART_DATA_5		4
+#define UART_DATA_6		5
+#define UART_DATA_7		6
+#define UART_DATA_8		7
+#define UART_DATA_9		8
 
 typedef struct
 {
