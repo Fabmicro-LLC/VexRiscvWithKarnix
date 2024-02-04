@@ -32,9 +32,9 @@ $(NAME).bit: $(LPF) $(VERILOG) toplevel.v
 
 upload:
 ifeq ("$(FLASH_METHOD)", "flash")
-	openFPGALoader -v --ftdi-channel $(FTDI_CHANNEL) -f --reset $(NAME).bin
+	openFPGALoader -v --ftdi-channel $(FTDI_CHANNEL) -f --reset $(NAME).bit
 else
-	openFPGALoader -v --ftdi-channel $(FTDI_CHANNEL) $(NAME).bin
+	openFPGALoader -v --ftdi-channel $(FTDI_CHANNEL) $(NAME).bit
 endif
 
 clean:
