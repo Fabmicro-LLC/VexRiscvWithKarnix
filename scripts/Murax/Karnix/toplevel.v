@@ -1,5 +1,7 @@
 `timescale 1ns / 1ps
 
+`include "pll25to75.v"
+
 module toplevel(
     input   io_clk25,
     input   [3:0] io_key,
@@ -26,9 +28,14 @@ module toplevel(
   assign io_gpioA_read[2] = io_key[2];
   assign io_gpioA_read[3] = io_key[3];
 
+  wire clk75;
+
+  pll i_pll(.in_clk25(io_clk25), .out_clk75(clk75));
+
   Murax murax ( 
     .io_asyncReset(io_key[3]),
-    .io_mainClk (io_clk25),
+    //.io_mainClk (io_clk25),
+    .io_mainClk (clk75),
     .io_jtag_tck(io_core_jtag_tck),
     .io_jtag_tdi(io_core_jtag_tdi),
     .io_jtag_tdo(io_core_jtag_tdo),

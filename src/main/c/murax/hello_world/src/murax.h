@@ -7,7 +7,7 @@
 #include "gpio.h"
 #include "uart.h"
 
-#define SYSTEM_CLOCK_HZ 25000000
+#define SYSTEM_CLOCK_HZ 75000000L
 
 #define GPIO_A    ((Gpio_Reg*)(0xF0000000))
 #define TIMER_PRESCALER ((Prescaler_Reg*)0xF0020000)

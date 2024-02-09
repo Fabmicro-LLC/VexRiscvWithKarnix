@@ -41,7 +41,7 @@ void main() {
 	const int nleds = 4;
 	const int nloops = 1000000;
 	while(1){
-		println("Hello world, this is Karnix ASB-254");
+		println("Hello world, this is VexRiscv!");
 		for(unsigned int i=0;i<nleds-1;i++){
     			GPIO_A->OUTPUT = 1<<i;
     			delay(nloops);

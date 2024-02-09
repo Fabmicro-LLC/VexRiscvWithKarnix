@@ -90,7 +90,7 @@ object MuraxConfig{
         catchIllegalInstruction = false
       ),
       new RegFilePlugin(
-        regFileReadyKind = plugin.SYNC,
+        regFileReadyKind = plugin.ASYNC,
         zeroBoot = false
       ),
       new IntAluPlugin,
@@ -536,7 +536,7 @@ object Murax_arty{
 object Murax_karnix{
   def main(args: Array[String]) {
     val hex = "src/main/c/murax/hello_world/build/hello_world.hex"
-    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 25 MHz, onChipRamSize = 96 kB, onChipRamHexFile = hex)))
+    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 75 MHz, onChipRamSize = 96 kB, onChipRamHexFile = hex)))
   }
 }
 
