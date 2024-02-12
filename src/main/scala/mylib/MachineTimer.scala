@@ -29,7 +29,7 @@ case class MachineTimerCtrl(clockMHz: Int = 25) extends Component {
 /*
  * Micros -> 0x00 Read register for micros since start-up
  **/
-case class Apb3MachineTimerCtrl(clockMHz : Int = 50) extends Component {
+case class Apb3MachineTimerCtrl(clockMHz : Int = 25) extends Component {
   val io = new Bundle {
     val apb = slave(Apb3(Apb3Config(addressWidth = 8, dataWidth = 32)))
   }
