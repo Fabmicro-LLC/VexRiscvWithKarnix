@@ -24,6 +24,16 @@ void delay(uint32_t loops){
 	}
 }
 
+void delay_us(unsigned int us){
+	unsigned int t = MTIME;
+	while(MTIME - t < us);
+}
+
+void delay_ms(unsigned int ms){
+	for(int i = 0; i < ms; i++)
+		delay_us(1000);	
+}
+
 void printhex(unsigned int number){
 	unsigned int mask = 0xf0000000;
 	static char hex_digits[11] = {0,0,0,0,0,0,0,0,'\r','\n','\0'};
@@ -60,12 +70,16 @@ void main() {
 	TIMER_PRESCALER->LIMIT = 0xFFFF; // Set max possible clock divider
 	while(1){
 		unsigned int shift_time;
+		unsigned int t1, t2;
 		println("Hello world, this is VexRiscv!");
 		for(unsigned int i=0;i<nleds-1;i++){
     			GPIO_A->OUTPUT = 1<<i;
 			TIMER_A->CLEARS_TICKS = 0x00020002;
 			TIMER_A->LIMIT = 0xFFFF;
+			t1 = MTIME;
     			delay(nloops);
+			//delay_ms(100);
+			t2 = MTIME;
 			shift_time = TIMER_A->VALUE; 
 		}
 		for(unsigned int i=0;i<nleds-1;i++){
@@ -74,6 +88,7 @@ void main() {
 		}
 
 		printhex(shift_time);
+		printhex(t2 - t1);
 	}
 }
 

@@ -15,6 +15,6 @@
 #define TIMER_A ((Timer_Reg*)0xF0020040)
 #define TIMER_B ((Timer_Reg*)0xF0020050)
 #define	UART	((Uart_Reg*)(0xF0010000))
-#define	MTIME	(*(volatile unsigned long long*)(0xF00B0000))
+#define	MTIME	(*(volatile unsigned long*)(0xF00B0000))
 
 #endif /* __MURAX_H__ */
