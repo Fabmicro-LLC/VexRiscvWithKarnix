@@ -5,7 +5,7 @@ import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.misc._
 
-case class MachineTimerCtrl(clockMHz: Int = 25) extends Component {
+case class MachineTimer(clockMHz: Int = 25) extends Component {
   val io = new Bundle {
     val micros = out UInt(32 bits)
   }
@@ -29,13 +29,13 @@ case class MachineTimerCtrl(clockMHz: Int = 25) extends Component {
 /*
  * Micros -> 0x00 Read register for micros since start-up
  **/
-case class Apb3MachineTimerCtrl(clockMHz : Int = 25) extends Component {
+case class Apb3MachineTimer(clockMHz : Int = 25) extends Component {
   val io = new Bundle {
     val apb = slave(Apb3(Apb3Config(addressWidth = 8, dataWidth = 32)))
   }
 
   val busCtrl = Apb3SlaveFactory(io.apb)
-  val mtCtrl = MachineTimerCtrl(clockMHz)
+  val mtCtrl = MachineTimer(clockMHz)
 
   mtCtrl.driveFrom(busCtrl)()
 }
