@@ -17,6 +17,7 @@ import spinal.lib.com.spi.ddr._
 import spinal.lib.bus.simple._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
+import mylib.Apb3MachineTimerCtrl
 
 /**
  * Created by PIC32F_USER on 28/07/2017.
@@ -295,6 +296,9 @@ case class Murax(config : MuraxConfig) extends Component{
     val timer = new MuraxApb3Timer()
     timerInterrupt setWhen(timer.io.interrupt)
     apbMapping += timer.io.apb     -> (0x20000, 4 kB)
+
+    val machineTimerCtrl = Apb3MachineTimerCtrl(coreFrequency.toInt / 1000000)
+    apbMapping += machineTimerCtrl.io.apb   -> (0xB0000, 4 kB)
 
     val xip = ifGen(genXip)(new Area{
       val ctrl = Apb3SpiXdrMasterCtrl(xipConfig)
