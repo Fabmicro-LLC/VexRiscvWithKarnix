@@ -5,6 +5,10 @@
 
 #define	UART_BAUD_RATE	115200
 
+#define	SRAM_SIZE	(512*1024)
+#define	SRAM_ADDR_BEGIN	0x90000000
+#define	SRAM_ADDR_END	(0x90000000 + SRAM_SIZE)
+
 void print(const char*str){
 	while(*str){
 		uart_write(UART,*str);
@@ -50,18 +54,64 @@ void printhex(unsigned int number){
 	print(hex_digits);
 }
 
+int sram_test_write_random_ints(void) {
+	volatile unsigned int *mem;
+	unsigned int fill;
+	int fails = 0;
+
+	fill = 0xdeadbeef; // random seed
+	mem = (unsigned int*) SRAM_ADDR_BEGIN;
+
+	print("Filling SRAM at: ");
+	printhex((unsigned int)mem);
+
+	while((unsigned int)mem < SRAM_ADDR_END) {
+		*mem++ = fill;
+		fill += 0xdeadbeef; // generate pseudo-random data
+	}
+
+	fill = 0xdeadbeef; // random seed
+	mem = (unsigned int*) SRAM_ADDR_BEGIN;
+
+	print("Checking SRAM at: ");
+	printhex((unsigned int)mem);
+
+	while((unsigned int)mem < SRAM_ADDR_END) {
+		if(*mem != fill) {
+			print("SRAM check failed at: ");
+			printhex((unsigned int)mem);
+			print("expected: ");
+			printhex((unsigned int)fill);
+			print("got: ");
+			printhex((unsigned int)*mem);
+			fails++;
+		}
+		mem++;
+		fill += 0xdeadbeef; // generate pseudo-random data
+	}
+
+	if((unsigned int)mem == SRAM_ADDR_END)
+		print("SRAM total fails: ");
+		printhex((unsigned int)fails);
+
+	return fails++;
+}
+
+
+
 void main() {
 	Uart_Config uart_config;
 
-        uart_config.dataLength = UART_DATA_8;
-        uart_config.parity = UART_PARITY_NONE;
-        uart_config.stop = UART_STOP_ONE;
+	uart_config.dataLength = UART_DATA_8;
+	uart_config.parity = UART_PARITY_NONE;
+	uart_config.stop = UART_STOP_ONE;
 
-        uint32_t rxSamplePerBit = UART_PRE_SAMPLING_SIZE + UART_SAMPLING_SIZE + UART_POST_SAMPLING_SIZE;
+	uint32_t rxSamplePerBit = UART_PRE_SAMPLING_SIZE + UART_SAMPLING_SIZE + UART_POST_SAMPLING_SIZE;
 
-        uart_config.clockDivider = SYSTEM_CLOCK_HZ / UART_BAUD_RATE / rxSamplePerBit - 1;
-        uart_applyConfig(UART, &uart_config);
+	uart_config.clockDivider = SYSTEM_CLOCK_HZ / UART_BAUD_RATE / rxSamplePerBit - 1;
+	uart_applyConfig(UART, &uart_config);
 
+	sram_test_write_random_ints();
 
 	GPIO_A->OUTPUT_ENABLE = 0x0000000F;
 	GPIO_A->OUTPUT = 0x00000001;
@@ -73,11 +123,11 @@ void main() {
 		unsigned int t1, t2;
 		println("Hello world, this is VexRiscv!");
 		for(unsigned int i=0;i<nleds-1;i++){
-    			GPIO_A->OUTPUT = 1<<i;
+			GPIO_A->OUTPUT = 1<<i;
 			TIMER_A->CLEARS_TICKS = 0x00020002;
 			TIMER_A->LIMIT = 0xFFFF;
 			t1 = MTIME;
-    			delay(nloops);
+			delay(nloops);
 			//delay_ms(100);
 			t2 = MTIME;
 			shift_time = TIMER_A->VALUE; 

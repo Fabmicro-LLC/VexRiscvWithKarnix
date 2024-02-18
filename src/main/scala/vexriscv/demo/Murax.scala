@@ -18,6 +18,8 @@ import spinal.lib.bus.simple._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
 import mylib.Apb3MachineTimer
+import mylib.{SramInterface,SramLayout,PipelinedMemoryBusSram}
+import mylib.Apb3MicroPLICCtrl
 
 /**
  * Created by PIC32F_USER on 28/07/2017.
@@ -171,6 +173,8 @@ case class Murax(config : MuraxConfig) extends Component{
     val uart = master(Uart())
 
     val xip = ifGen(genXip)(master(SpiXdrMaster(xipConfig.ctrl.spi)))
+
+    val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
   }
 
 
@@ -234,7 +238,8 @@ case class Murax(config : MuraxConfig) extends Component{
 
     //Checkout plugins used to instanciate the CPU to connect them to the SoC
     val timerInterrupt = False
-    val externalInterrupt = False
+    //val externalInterrupt = True 
+    val externalInterrupt = Bool() 
     for(plugin <- cpu.plugins) plugin match{
       case plugin : IBusSimplePlugin =>
         mainBusArbiter.io.iBus.cmd <> plugin.iBus.cmd
@@ -280,21 +285,36 @@ case class Murax(config : MuraxConfig) extends Component{
     )
     mainBusMapping += apbBridge.io.pipelinedMemoryBus -> (0xF0000000l, 1 MB)
 
+    val sramCtrl = new PipelinedMemoryBusSram(
+      pipelinedMemoryBusConfig = pipelinedMemoryBusConfig,
+      sramLayout = SramLayout(addressWidth = 18, dataWidth = 16)
+    )
+    sramCtrl.io.sram <> io.sram
+    mainBusMapping += sramCtrl.io.bus -> (0x90000000l, 512 kB)
+
 
 
     //******** APB peripherals *********
     val apbMapping = ArrayBuffer[(Apb3, SizeMapping)]()
+
+    val plic = new Apb3MicroPLICCtrl()
+    apbMapping += plic.io.apb     -> (0x60000, 64 kB)
+    externalInterrupt := plic.io.externalInterrupt
+    plic.io.IRQLines := 0
+
     val gpioACtrl = Apb3Gpio(gpioWidth = gpioWidth, withReadSync = true)
     io.gpioA <> gpioACtrl.io.gpio
     apbMapping += gpioACtrl.io.apb -> (0x00000, 4 kB)
 
     val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
     uartCtrl.io.uart <> io.uart
-    externalInterrupt setWhen(uartCtrl.io.interrupt)
+    //externalInterrupt setWhen(uartCtrl.io.interrupt)
+    plic.setIRQ(uartCtrl.io.interrupt, 0)
     apbMapping += uartCtrl.io.apb  -> (0x10000, 4 kB)
 
     val timer = new MuraxApb3Timer()
-    timerInterrupt setWhen(timer.io.interrupt)
+    //timerInterrupt setWhen(timer.io.interrupt)
+    plic.setIRQ(timer.io.interrupt, 3)
     apbMapping += timer.io.apb     -> (0x20000, 4 kB)
 
     val machineTimer = Apb3MachineTimer(coreFrequency.toInt / 1000000)
@@ -541,7 +561,7 @@ object Murax_arty{
 object Murax_karnix{
   def main(args: Array[String]) {
     val hex = "src/main/c/murax/hello_world/build/hello_world.hex"
-    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 75 MHz, onChipRamSize = 96 kB, onChipRamHexFile = hex)))
+    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 79.9 MHz, onChipRamSize = 96 kB, onChipRamHexFile = hex)))
   }
 }
 
