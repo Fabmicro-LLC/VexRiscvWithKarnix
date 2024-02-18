@@ -26,7 +26,7 @@ $(VERILOG) $(BIN): $(HEX) $(VEXRISCV)
 
 $(NAME).bit: $(LPF) $(VERILOG) toplevel.v
 	yosys -v2 -p "synth_ecp5 -abc2 -top toplevel -json $(NAME).json" $(VERILOG) toplevel.v
-	nextpnr-ecp5 --package $(PACKAGE) --$(DEVICE) --json $(NAME).json --textcfg $(NAME)_out.config --lpf $(LPF) --lpf-allow-unconstrained
+	nextpnr-ecp5 --seed 4433 --speed 6 --package $(PACKAGE) --$(DEVICE) --json $(NAME).json --textcfg $(NAME)_out.config --lpf $(LPF) --lpf-allow-unconstrained
 	ecppack --compress --freq 38.8 --input $(NAME)_out.config --bit $(NAME).bit
 
 
