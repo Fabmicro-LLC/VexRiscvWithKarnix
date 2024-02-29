@@ -103,6 +103,8 @@ object MuraxConfig{
       ),
       //new LightShifterPlugin,
       new FullBarrelShifterPlugin,
+      new MulPlugin,
+      new DivPlugin,
       new HazardSimplePlugin(
         bypassExecute = false,
         bypassMemory = false,
