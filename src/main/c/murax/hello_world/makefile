@@ -1,7 +1,7 @@
 PROJ_NAME=hello_world
 DEBUG=no
 BENCH=no
-MULDIV=no
+MULDIV=yes
 
 SRCS = 	$(wildcard src/*.c) \
 		$(wildcard src/*.cpp)  \
@@ -10,7 +10,7 @@ SRCS = 	$(wildcard src/*.c) \
 OBJDIR = build
 
 INC  =
-LIBS =
+LIBS = -lc_nano
 LIBSINC = -L$(OBJDIR)
 LDSCRIPT = ./src/linker.ld
 
