@@ -1,11 +1,3 @@
-/*
-This is free and unencumbered software released into the public domain.
-
-Anyone is free to copy, modify, publish, use, compile, sell, or
-distribute this software, either in source code form or as a compiled
-binary, for any purpose, commercial or non-commercial, and by any
-means.
-*/
 OUTPUT_FORMAT("elf32-littleriscv", "elf32-littleriscv", "elf32-littleriscv")
 OUTPUT_ARCH(riscv)
 ENTRY(crtStart)
@@ -15,7 +7,8 @@ MEMORY {
 }
 
 _stack_size = DEFINED(_stack_size) ? _stack_size : 2048;
-_heap_size = DEFINED(_heap_size) ? _heap_size : 0;
+_ram_heap_size = DEFINED(_ram_heap_size) ? _ram_heap_size : 0;
+
 
 SECTIONS {
 
@@ -24,25 +17,6 @@ SECTIONS {
     *crt.o(.text);
   } > RAM
 
-  ._user_heap (NOLOAD):
-  {
-    . = ALIGN(8);
-    PROVIDE ( end = . );
-    PROVIDE ( _end = . );
-    PROVIDE ( _heap_start = .);
-    . = . + _heap_size;
-    . = ALIGN(8);
-    PROVIDE ( _heap_end = .);
-  } > RAM
-
-._stack (NOLOAD):
-  {
-    . = ALIGN(16);
-    PROVIDE (_stack_end = .);
-    . = . + _stack_size;
-    . = ALIGN(16);
-    PROVIDE (_stack_start = .);
-  } > RAM
 
   .data :
   {
@@ -106,5 +80,26 @@ SECTIONS {
     _ctors_end = .;
     PROVIDE ( END_OF_SW_IMAGE = . );
   } > RAM
+
+
+  ._stack (NOLOAD):
+  {
+    . = ALIGN(16);
+    PROVIDE (_stack_end = .);
+    . = . + _stack_size;
+    . = ALIGN(16);
+    PROVIDE (_stack_start = .);
+  } > RAM
+
+  ._ram_heap (NOLOAD):
+  {
+    . = ALIGN(8);
+    PROVIDE ( end = . );
+    PROVIDE ( _end = . );
+    PROVIDE ( _ram_heap_start = .);
+    . = . + _ram_heap_size;
+    PROVIDE ( _ram_heap_end = ALIGN(ORIGIN(RAM) + LENGTH(RAM) ,8) );
+  } > RAM
+
 
 }
