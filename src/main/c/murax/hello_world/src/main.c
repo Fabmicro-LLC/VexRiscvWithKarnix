@@ -1,13 +1,34 @@
 //#include "stddefs.h"
 #include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/stat.h>
 
 #include "murax.h"
+#include "riscv.h"
+#include "mac.h"
 
 #define	UART_BAUD_RATE	115200
 
 #define	SRAM_SIZE	(512*1024)
 #define	SRAM_ADDR_BEGIN	0x90000000
 #define	SRAM_ADDR_END	(0x90000000 + SRAM_SIZE)
+
+// Below is some linker specific stuff 
+extern unsigned int end; /* Set by linker.  */
+extern unsigned int _ram_heap_start; /* Set by linker.  */
+extern unsigned int _ram_heap_end; /* Set by linker.  */
+extern unsigned int _stack_start; /* Set by linker.  */
+extern unsigned int _stack_size; /* Set by linker.  */
+
+unsigned char* sbrk_heap_end = 0; /* tracks heap usage */
+unsigned int* heap_start = 0; /* programmer define heap start */
+unsigned int* heap_end = 0; /* programmer defined heap end */
+
+volatile int total_irqs = 0;
+volatile int extint_irqs = 0;
+
+int dhcp_send_discover(void);
 
 void print(const char*str){
 	while(*str){
@@ -97,6 +118,69 @@ int sram_test_write_random_ints(void) {
 	return fails++;
 }
 
+void init_sbrk(unsigned int* heap, int size) {
+
+	if(heap == NULL) {
+		heap_start = (unsigned int*)& _ram_heap_start;
+		heap_end = (unsigned int*)& _ram_heap_end;
+	} else {
+		heap_start = heap;
+		heap_end = heap_start + size;
+	}
+
+	sbrk_heap_end = (char*) heap_start;
+}
+
+
+void* _sbrk(unsigned int incr) {
+
+	unsigned char* prev_heap_end;
+
+	if (sbrk_heap_end == 0) {
+		// In case init_sbrk() has not been called
+		// use on-chip RAM by default
+		heap_start = & _ram_heap_start;
+		heap_end = & _ram_heap_end;
+		sbrk_heap_end = (char*) heap_start;
+	}
+
+	prev_heap_end = sbrk_heap_end;
+
+	if((unsigned int)(sbrk_heap_end + incr) >= (unsigned int)heap_end) {
+
+		println("_sbrk() OUT OF MEM:");
+		print("sbrk_heap_end = ");
+		printhex((unsigned int)sbrk_heap_end);
+	       	print("heap_end = ");
+		printhex((unsigned int)heap_end);
+		print("incr = ");
+		printhex((unsigned int)incr);
+
+		return ((void*)-1); // error - no more free memory
+	}
+
+	sbrk_heap_end += incr;
+
+	return (void *) prev_heap_end;
+}
+
+
+int _write (int fd, const void *buf, size_t count) {
+	int i;
+	char* p = (char*) buf;
+	for(i = 0; i < count; i++) { uart_write(UART, *p++); }
+	return count;
+}
+
+int _read (int fd, const void *buf, size_t count) { return 1; }
+int _close(int fd) { return -1; }
+int _lseek(int fd, int offset, int whence) { return 0 ;}
+int _isatty(int fd) { return 1; }
+
+int _fstat(int fd, struct stat *sb) {
+	sb->st_mode = S_IFCHR;
+	return 0;
+}
 
 
 void main() {
@@ -111,7 +195,29 @@ void main() {
 	uart_config.clockDivider = SYSTEM_CLOCK_HZ / UART_BAUD_RATE / rxSamplePerBit - 1;
 	uart_applyConfig(UART, &uart_config);
 
-	sram_test_write_random_ints();
+	if(sram_test_write_random_ints() == 0) {
+		init_sbrk((unsigned int*)SRAM_ADDR_BEGIN, SRAM_SIZE);
+		println("Enabled heap on SRAM");
+	} else {
+		init_sbrk(NULL, 0);
+		println("Enabled heap on on-chip RAM");
+	}
+
+	char *test = malloc(1024);
+	println("Malloc test:");
+	printhex((unsigned int)test);
+
+        // Configure interrupt controller 
+        PLIC->POLARITY = 0xffffffff; // Set all IRQ polarity to High
+        PLIC->PENDING = 0; // Clear pending IRQs
+	PLIC->ENABLE = 0xffffffff; // Enable all ext interrupts
+
+	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts
+
+        // Configure UART0 IRQ sources: bit(0) - TX interrupts, bit(1) - RX interrupts 
+        UART->STATUS |= (1<<1); // Allow only RX interrupts 
+
+	mac_init();
 
 	GPIO_A->OUTPUT_ENABLE = 0x0000000F;
 	GPIO_A->OUTPUT = 0x00000001;
@@ -121,7 +227,13 @@ void main() {
 	while(1){
 		unsigned int shift_time;
 		unsigned int t1, t2;
-		println("Hello world, this is VexRiscv!");
+		//println("Hello world, this is VexRiscv!");
+		//char str[128];
+		//vsnprintf(str, 128, "Hello world, this is VexRiscv!\r\n", NULL);
+		//print(str);
+		printf("Hello world, this is VexRiscv!\r\n");
+		printf("PLIC: pending = %0X, total_irqs = %d, extint_irqs = %d\r\n", PLIC->PENDING, total_irqs, extint_irqs);
+
 		for(unsigned int i=0;i<nleds-1;i++){
 			GPIO_A->OUTPUT = 1<<i;
 			TIMER_A->CLEARS_TICKS = 0x00020002;
@@ -139,8 +251,75 @@ void main() {
 
 		printhex(shift_time);
 		printhex(t2 - t1);
+
+		dhcp_send_discover();
 	}
 }
 
-void irqCallback(){
+
+void crash(int cause) {
+
+	print("\r\n*** EXCEPTION: ");
+	printhex(cause);
+	print("\r\n");
+
+	while(1);
 }
+
+static char mac_buf[2048];
+
+void externalInterrupt() {
+
+	unsigned int pending_irqs = PLIC->PENDING;
+
+	print("EXTIRQ: pending flags = ");
+	printhex(pending_irqs);
+	
+	if(pending_irqs & PLIC_IRQ_UART0) {
+		unsigned int data = UART->DATA;
+		print("UART: ");
+		printhex(data & 0xff);
+	}
+
+	if(pending_irqs & PLIC_IRQ_MAC) {
+		if(mac_rxPending(MAC)) {
+			int read_bytes = mac_rx(mac_buf);
+			print("MAC RX bytes: ");
+			printhex(read_bytes);
+		}
+	}
+
+	PLIC->PENDING &= 0x0; // clear all pending ext interrupts
+}
+
+void irqCallback() {
+
+	// Interrupts are already disabled by machine
+
+	int32_t mcause = csr_read(mcause);
+	int32_t interrupt = mcause < 0;    // HW interrupt if true, exception if false
+	int32_t cause     = mcause & 0xF;
+
+	if(interrupt){
+		switch(cause) {
+			case CAUSE_MACHINE_TIMER: {
+				print("\r\n*** irqCallback: machine timer irq ? WEIRD!\r\n");
+				break;
+			}
+			case CAUSE_MACHINE_EXTERNAL: {
+				externalInterrupt();
+				extint_irqs++;	
+				break;
+			}
+			default: {
+				print("\r\n*** irqCallback: unsupported exception cause: ");
+				printhex((unsigned int)cause);
+			} break;
+		}
+	} else {
+		crash(cause);
+	}
+
+	total_irqs++;
+}
+
