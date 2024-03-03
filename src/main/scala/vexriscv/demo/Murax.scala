@@ -20,6 +20,8 @@ import scala.collection.Seq
 import mylib.Apb3MachineTimer
 import mylib.{SramInterface,SramLayout,PipelinedMemoryBusSram}
 import mylib.Apb3MicroPLICCtrl
+import mylib.Apb3MacEthCtrl
+import spinal.lib.com.eth._
 
 /**
  * Created by PIC32F_USER on 28/07/2017.
@@ -44,6 +46,7 @@ case class MuraxConfig(coreFrequency : HertzNumber,
                        pipelineMainBus    : Boolean,
                        pipelineApbBridge  : Boolean,
                        gpioWidth          : Int,
+                       macConfig          : MacEthParameter,
                        uartCtrlConfig     : UartCtrlMemoryMappedConfig,
                        xipConfig          : SpiXdrMasterCtrl.MemoryMappingParameters,
                        hardwareBreakpointCount : Int,
@@ -120,6 +123,16 @@ object MuraxConfig{
       ),
       new YamlPlugin("cpu0.yaml")
     ),
+    macConfig = MacEthParameter(
+      phy = PhyParameter(
+        txDataWidth = 4,
+        rxDataWidth = 4
+      ),
+      rxDataWidth = 32,
+      rxBufferByteSize = 4096,
+      txDataWidth = 32,
+      txBufferByteSize = 4096
+    ),
     uartCtrlConfig = UartCtrlMemoryMappedConfig(
       uartCtrlConfig = UartCtrlGenerics(
         dataWidthMax      = 8,
@@ -173,12 +186,34 @@ case class Murax(config : MuraxConfig) extends Component{
     //Peripherals IO
     val gpioA = master(TriStateArray(gpioWidth bits))
     val uart = master(Uart())
+    val mii = master(Mii(MiiParameter(MiiTxParameter(dataWidth = config.macConfig.phy.txDataWidth, withEr = false), MiiRxParameter( dataWidth = config.macConfig.phy.rxDataWidth))))
 
     val xip = ifGen(genXip)(master(SpiXdrMaster(xipConfig.ctrl.spi)))
 
     val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
   }
 
+  /*
+
+// LAN PHY
+    murax.io.mii.TX.CLK := io.lan_txclk
+    io.lan_txen := murax.io.mii.TX.EN
+    io.lan_txd0 := murax.io.mii.TX.D(0)
+    io.lan_txd1 := murax.io.mii.TX.D(1)
+    io.lan_txd2 := murax.io.mii.TX.D(2)
+    io.lan_txd3 := murax.io.mii.TX.D(3)
+
+    murax.io.mii.RX.CLK := io.lan_rxclk
+    murax.io.mii.RX.D(0) := io.lan_rxd0
+    murax.io.mii.RX.D(1) := io.lan_rxd1
+    murax.io.mii.RX.D(2) := io.lan_rxd2
+    murax.io.mii.RX.D(3) := io.lan_rxd3
+    murax.io.mii.RX.DV := io.lan_rxdv
+    murax.io.mii.RX.ER := io.lan_rxer
+    murax.io.mii.RX.CRS := io.lan_crs
+    murax.io.mii.RX.COL := io.lan_col
+
+   */
 
   val resetCtrlClockDomain = ClockDomain(
     clock = io.mainClk,
@@ -313,6 +348,11 @@ case class Murax(config : MuraxConfig) extends Component{
     //externalInterrupt setWhen(uartCtrl.io.interrupt)
     plic.setIRQ(uartCtrl.io.interrupt, 0)
     apbMapping += uartCtrl.io.apb  -> (0x10000, 4 kB)
+
+    val macCtrl = new Apb3MacEthCtrl(macConfig)
+    apbMapping += macCtrl.io.apb     -> (0x70000, 64 kB)
+    macCtrl.io.mii <> io.mii
+    plic.setIRQ(macCtrl.io.interrupt, 2)
 
     val timer = new MuraxApb3Timer()
     //timerInterrupt setWhen(timer.io.interrupt)
@@ -563,7 +603,7 @@ object Murax_arty{
 object Murax_karnix{
   def main(args: Array[String]) {
     val hex = "src/main/c/murax/hello_world/build/hello_world.hex"
-    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 79.9 MHz, onChipRamSize = 96 kB, onChipRamHexFile = hex)))
+    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 75.5 MHz, onChipRamSize = 96 kB, onChipRamHexFile = hex)))
   }
 }
 
