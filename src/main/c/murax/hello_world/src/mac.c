@@ -14,11 +14,6 @@ void mac_init(void) {
 	mac_setCtrl(MAC, 0);
 }
 
-void mac_empty_fifo(void) {
-	while(mac_rxPending(MAC) == 0);
-	mac_getRx(MAC);
-}
-
 int mac_rx(uint8_t* mac_buf) {
 
 	uint32_t bytes_read = 0;

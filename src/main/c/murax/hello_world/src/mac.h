@@ -1,6 +1,8 @@
 #ifndef _MAC_H_
 #define _MAC_H_
 
+#include <stdint.h>
+
 typedef struct
 {
 	volatile uint32_t CTRL;
@@ -84,7 +86,6 @@ inline uint32_t mac_pushTx(MAC_Reg *reg, uint32_t val){
 }
 
 void mac_init(void);
-void mac_empty_fifo(void);
 int mac_rx(uint8_t* mac_buf);
 int mac_tx(uint8_t *mac_buf, int frame_size);
 
