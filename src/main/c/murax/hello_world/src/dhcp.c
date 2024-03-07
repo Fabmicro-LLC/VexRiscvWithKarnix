@@ -8,7 +8,7 @@
 #define	SWAP32(X)	__builtin_bswap32((X))
 #define	SWAP16(X)	__builtin_bswap16((X))
 
-uint8_t hw_my_addr[6] = { 0x00, 0x1a, 0x80, 0x80, 0x2c, 0xc3 };
+uint8_t hw_my_addr[6] = { 0x06, 0xaa, 0xbb, 0xcc, 0xdd, 0xee };
 uint8_t hw_brd_addr[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 uint16_t ip_check_sum(uint16_t *addr, int len)
@@ -83,7 +83,7 @@ typedef struct {
 
 int dhcp_send_discover(void) {
 
-	static uint32_t xip = 0x12345678;
+	static uint32_t xid = 0x12345678;
 	int frame_size = 0;
 
 	MAC_IP_UDP_DHCP_Message *msg = (MAC_IP_UDP_DHCP_Message*) malloc(2048);
@@ -96,7 +96,7 @@ int dhcp_send_discover(void) {
 	bzero(msg, 2048);
 
 	msg->dhcp.op = 1; msg->dhcp.htype = 1; msg->dhcp.hlen = 6; msg->dhcp.hops = 0;
-	msg->dhcp.xid = SWAP32(xip++); msg->dhcp.secs = 0; msg->dhcp.flags = 0;
+	msg->dhcp.xid = SWAP32(xid++); msg->dhcp.secs = 0; msg->dhcp.flags = 0;
 	msg->dhcp.magic[0]=0x63; msg->dhcp.magic[1]=0x82; msg->dhcp.magic[2]=0x53; msg->dhcp.magic[3]=0x63;
 	msg->dhcp.opt[0]=0x35; msg->dhcp.opt[1]=1; msg->dhcp.opt[2]=1; // Discovery
 	msg->dhcp.opt[3]=0x37; msg->dhcp.opt[4]=4; // Parameter request list
