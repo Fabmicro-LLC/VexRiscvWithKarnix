@@ -6,6 +6,22 @@
 
 #define	MAC_DEBUG	1
 
+#ifdef MAC_DEBUG
+#include <stdarg.h>
+
+extern void print(char *);
+
+char mac_msg[256];
+
+void mac_printf(const char* fmt, ...) {
+	va_list args;
+	va_start(args, fmt);
+	vsnprintf(mac_msg, 256, fmt, args);
+	va_end(args);
+	print(mac_msg);
+}
+#endif
+
 extern void delay_us(unsigned int);
 
 void mac_init(void) {
@@ -18,8 +34,8 @@ int mac_rx(uint8_t* mac_buf) {
 
 	uint32_t bytes_read = 0;
 
-	#if MAC_DEBUG
-	printf("mac_rx() begin\r\n");
+	#ifdef MAC_DEBUG
+	mac_printf("mac_rx() begin\r\n");
 	#endif
 
 	if(mac_rxPending(MAC)) {
@@ -31,13 +47,13 @@ int mac_rx(uint8_t* mac_buf) {
 		uint32_t word;
 
 		if(bytes_left > 2048) {
-			printf("mac_rx() RX FIFO error, bytes_left = %d bytes (%d bits)\r\n", bytes_left, bits);
+			mac_printf("mac_rx() RX FIFO error, bytes_left = %d bytes (%d bits)\r\n", bytes_left, bits);
 			mac_init();
 			return -MAC_ERR_RX_FIFO;
 		}
 
-		#if MAC_DEBUG
-		printf("mac_rx() reading %d bytes (%d bits)\r\n", bytes_left, bits);
+		#ifdef MAC_DEBUG
+		mac_printf("mac_rx() reading %d bytes (%d bits)\r\n", bytes_left, bits);
 		#endif
 
 		while(bytes_left) {
@@ -48,7 +64,7 @@ int mac_rx(uint8_t* mac_buf) {
 
 			if(i == 0) {
 				#if MAC_DEBUG
-				printf("mac_rx() timeout, bytes_left = %d\r\n", bytes_left);
+				mac_printf("mac_rx() timeout, bytes_left = %d\r\n", bytes_left);
 				#endif
 				return -MAC_ERR_RX_TIMEOUT;
 			}
@@ -64,8 +80,8 @@ int mac_rx(uint8_t* mac_buf) {
 
 		}
 
-		#if MAC_DEBUG
-		printf("mac_rx() %02x:%02x:%02x:%02x:%02x:%02x <- %02x:%02x:%02x:%02x:%02x:%02x "
+		#ifdef MAC_DEBUG
+		mac_printf("mac_rx() %02x:%02x:%02x:%02x:%02x:%02x <- %02x:%02x:%02x:%02x:%02x:%02x "
 				"type: 0x%02x%02x, bytes_left = %d, "
 				"words = %d, bytes_read = %d, last word = 0x%08x\r\n", 
 			mac_buf[0], mac_buf[1], mac_buf[2], mac_buf[3], mac_buf[4], mac_buf[5],
@@ -75,8 +91,8 @@ int mac_rx(uint8_t* mac_buf) {
 		#endif
 	}
 
-	#if MAC_DEBUG
-	printf("mac_rx() done, bytes read = %d\r\n", bytes_read);
+	#ifdef MAC_DEBUG
+	mac_printf("mac_rx() done, bytes read = %d\r\n", bytes_read);
 	#endif
 
 	return bytes_read;
@@ -86,8 +102,8 @@ int mac_rx(uint8_t* mac_buf) {
 int mac_tx(uint8_t *mac_buf, int frame_size) {
 
 	if(mac_buf == NULL || frame_size < 0 || frame_size >= 2048) {
-		#if MAC_DEBUG
-		printf("mac_tx() wrong args: mac_buf = %p, frame_size = %d\r\n", mac_buf, frame_size);
+		#ifdef MAC_DEBUG
+		mac_printf("mac_tx() wrong args: mac_buf = %p, frame_size = %d\r\n", mac_buf, frame_size);
 		#endif
 		return -MAC_ERR_ARGS;
 	}
@@ -95,8 +111,8 @@ int mac_tx(uint8_t *mac_buf, int frame_size) {
         uint32_t bits = frame_size*8;
         uint32_t words = (bits+31)/32;
 
-	#if MAC_DEBUG
-	printf("mac_tx() sending MAC frame size = %d (%d words)\r\n", frame_size, words);
+	#ifdef MAC_DEBUG
+	mac_printf("mac_tx() sending MAC frame size = %d (%d words)\r\n", frame_size, words);
 	#endif
 	
 	// wait for MAC controller to get ready to send
@@ -136,8 +152,8 @@ int mac_tx(uint8_t *mac_buf, int frame_size) {
 		words_sent++;
 	}
 
-	#if MAC_DEBUG
-	printf("mac_tx() %02x:%02x:%02x:%02x:%02x:%02x <- %02x:%02x:%02x:%02x:%02x:%02x "
+	#ifdef MAC_DEBUG
+	mac_printf("mac_tx() %02x:%02x:%02x:%02x:%02x:%02x <- %02x:%02x:%02x:%02x:%02x:%02x "
 			"type: 0x%02x%02x, byte_idx = %d, words sent = %d, frame_size = %d\r\n",
 		mac_buf[0], mac_buf[1], mac_buf[2], mac_buf[3], mac_buf[4], mac_buf[5],
 		mac_buf[6], mac_buf[7], mac_buf[8], mac_buf[9], mac_buf[10], mac_buf[11],
