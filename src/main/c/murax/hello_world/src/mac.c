@@ -11,14 +11,14 @@
 
 extern void print(char *);
 
-char mac_msg[256];
+char mac_dbg_msg[256];
 
 void mac_printf(const char* fmt, ...) {
 	va_list args;
 	va_start(args, fmt);
-	vsnprintf(mac_msg, 256, fmt, args);
+	vsnprintf(mac_dbg_msg, 256, fmt, args);
 	va_end(args);
-	print(mac_msg);
+	print(mac_dbg_msg);
 }
 #endif
 
@@ -154,7 +154,7 @@ int mac_tx(uint8_t *mac_buf, int frame_size) {
 
 	#ifdef MAC_DEBUG
 	mac_printf("mac_tx() %02x:%02x:%02x:%02x:%02x:%02x <- %02x:%02x:%02x:%02x:%02x:%02x "
-			"type: 0x%02x%02x, byte_idx = %d, words sent = %d, frame_size = %d\r\n",
+		"type: 0x%02x%02x, byte_idx = %d, words sent = %d, frame_size = %d\r\n",
 		mac_buf[0], mac_buf[1], mac_buf[2], mac_buf[3], mac_buf[4], mac_buf[5],
 		mac_buf[6], mac_buf[7], mac_buf[8], mac_buf[9], mac_buf[10], mac_buf[11],
 		mac_buf[12], mac_buf[13],
