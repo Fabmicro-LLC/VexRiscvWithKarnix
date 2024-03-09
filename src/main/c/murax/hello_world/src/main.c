@@ -28,6 +28,7 @@ unsigned int* heap_end = 0; /* programmer defined heap end */
 volatile int total_irqs = 0;
 volatile int extint_irqs = 0;
 
+static char mac_rx_buf[2048];
 int dhcp_send_discover(void);
 
 void print(const char*str){
@@ -43,6 +44,11 @@ void println(const char*str){
 }
 
 void delay(uint32_t loops){
+
+	if(mac_rxPending(MAC)) {
+		mac_rx(mac_rx_buf);
+	}
+
 	for(int i=0;i<loops;i++){
 		//int tmp = GPIO_A->OUTPUT;
 		asm volatile ("slli t1,t1,0x10");
@@ -183,6 +189,7 @@ int _fstat(int fd, struct stat *sb) {
 }
 
 
+
 void main() {
 	Uart_Config uart_config;
 
@@ -266,8 +273,6 @@ void crash(int cause) {
 	while(1);
 }
 
-static char mac_buf[2048];
-
 void externalInterrupt() {
 
 	unsigned int pending_irqs = PLIC->PENDING;
@@ -279,14 +284,6 @@ void externalInterrupt() {
 		unsigned int data = UART->DATA;
 		print("UART: ");
 		printhex(data & 0xff);
-	}
-
-	if(pending_irqs & PLIC_IRQ_MAC) {
-		if(mac_rxPending(MAC)) {
-			int read_bytes = mac_rx(mac_buf);
-			print("MAC RX bytes: ");
-			printhex(read_bytes);
-		}
 	}
 
 	PLIC->PENDING &= 0x0; // clear all pending ext interrupts
