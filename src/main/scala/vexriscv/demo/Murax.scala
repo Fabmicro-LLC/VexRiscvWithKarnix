@@ -615,3 +615,103 @@ object MuraxAsicBlackBox extends App{
   config.generateVerilog(Murax(MuraxConfig.default()))
 }
 
+
+
+import spinal.sim._
+import spinal.core.sim._
+
+object Murax_karnix_Sim {
+  def main(args: Array[String]) {
+
+    SimConfig.withWave.compile{
+      val dut = new Murax(MuraxConfig.default(withXip = false).copy(
+              coreFrequency = 75.5 MHz,
+              onChipRamSize = 96 kB ,
+              //pipelineMainBus = true,
+              onChipRamHexFile = "src/main/c/murax/hello_world/build/hello_world.hex"
+      )) 
+
+      dut.io.asyncReset.simPublic()
+      dut.io.mainClk.simPublic()
+      dut.system.cpu.lastStageInstruction.simPublic()
+      dut.system.cpu.lastStagePc.simPublic()
+      dut.system.cpu.decode.arbitration.isValid.simPublic()
+      dut.system.cpu.decode.arbitration.haltItself.simPublic()
+      dut.system.cpu.decode.arbitration.haltByOther.simPublic()
+      dut.system.cpu.execute.arbitration.isValid.simPublic()
+      dut.system.cpu.execute.arbitration.haltItself.simPublic()
+      dut.system.cpu.execute.arbitration.haltByOther.simPublic()
+      dut.system.cpu.memory.arbitration.isValid.simPublic()
+      dut.system.cpu.memory.arbitration.haltItself.simPublic()
+      dut.system.cpu.memory.arbitration.haltByOther.simPublic()
+      dut.system.cpu.writeBack.arbitration.isValid.simPublic()
+      dut.system.cpu.writeBack.arbitration.haltItself.simPublic()
+      dut.system.cpu.writeBack.arbitration.haltByOther.simPublic()
+      dut.system.mainBusArbiter.io.dBus.cmd.valid.simPublic()
+      dut.system.mainBusArbiter.io.dBus.cmd.wr.simPublic()
+      dut.system.mainBusArbiter.io.dBus.cmd.ready.simPublic()
+      dut.system.mainBusArbiter.io.dBus.cmd.address.simPublic()
+      dut.system.mainBusArbiter.io.dBus.cmd.data.simPublic()
+      dut.system.mainBusArbiter.io.iBus.cmd.valid.simPublic()
+      dut.system.mainBusArbiter.io.iBus.cmd.ready.simPublic()
+      dut.system.mainBusArbiter.io.iBus.cmd.pc.simPublic()
+      dut.system.mainBusArbiter.rspPending.simPublic()
+      dut.system.mainBusArbiter.rspTarget.simPublic()
+      dut.system.mainBusArbiter.io.dBus.rsp.ready.simPublic()
+      dut.system.mainBusArbiter.io.dBus.rsp.data.simPublic()
+      dut.system.mainBusArbiter.io.iBus.rsp.valid.simPublic()
+      dut.system.mainBusArbiter.io.iBus.rsp.inst.simPublic()
+      dut.system.sramCtrl.io.bus.cmd.valid.simPublic()
+      dut.system.sramCtrl.io.bus.cmd.write.simPublic()
+      dut.system.sramCtrl.io.bus.cmd.mask.simPublic()
+      dut.system.sramCtrl.io.bus.cmd.ready.simPublic()
+      dut.system.sramCtrl.io.bus.cmd.address.simPublic()
+      dut.system.sramCtrl.io.bus.cmd.data.simPublic()
+      dut.system.sramCtrl.io.bus.rsp.valid.simPublic()
+      dut.system.sramCtrl.io.bus.rsp.data.simPublic()
+
+      dut
+
+    }.doSim { 
+
+      dut =>
+
+      // Create our own clock domain using external signals mainClk and asyncReset
+      val myClockDomain = ClockDomain(dut.io.mainClk, dut.io.asyncReset)
+
+      // Fork process that drives our clock
+      myClockDomain.forkStimulus(period = 10)
+
+      // We are in reset state at the beginning
+      myClockDomain.assertReset()
+
+      // Simulate next 1k clock cycles
+      for(idx <- 0 to 9999) {
+    
+        if(idx > 1) { myClockDomain.deassertReset() }
+
+        myClockDomain.waitRisingEdge()
+
+        if(!dut.system.sramCtrl.io.bus.cmd.write.toBoolean &&
+           dut.system.sramCtrl.io.bus.cmd.address.toLong >= 0x90000000l &&
+           dut.system.sramCtrl.io.bus.cmd.address.toLong <= 0x900400ffl) {
+
+            println("[cycle: %8d, pc: %08x, instr: %08x] dut.system.sramCtrl: cmd.valid = %s, cmd.ready = %s, cmd.write = %s, cmd.mask = %08x, cmd.address = %08x, cmd.data = %08x, rsp.valid = %s, rsp.data = %08x".format(
+              idx,
+              dut.system.cpu.lastStagePc.toLong,
+              dut.system.cpu.lastStageInstruction.toLong,
+              dut.system.sramCtrl.io.bus.cmd.valid.toBoolean,
+              dut.system.sramCtrl.io.bus.cmd.ready.toBoolean,
+              dut.system.sramCtrl.io.bus.cmd.write.toBoolean,
+              dut.system.sramCtrl.io.bus.cmd.mask.toLong,
+              dut.system.sramCtrl.io.bus.cmd.address.toLong,
+              dut.system.sramCtrl.io.bus.cmd.data.toLong,
+              dut.system.sramCtrl.io.bus.rsp.valid.toBoolean,
+              dut.system.sramCtrl.io.bus.rsp.data.toLong
+            ))
+        }
+      }
+    }
+  }
+}
+

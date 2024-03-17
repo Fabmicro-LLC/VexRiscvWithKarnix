@@ -202,6 +202,11 @@ void main() {
 	uart_config.clockDivider = SYSTEM_CLOCK_HZ / UART_BAUD_RATE / rxSamplePerBit - 1;
 	uart_applyConfig(UART, &uart_config);
 
+	char a[8];
+        a[0] = *(char*)(0x90000000 + 3);
+	a[1] = 0;
+	println(a);
+
 	if(sram_test_write_random_ints() == 0) {
 		init_sbrk((unsigned int*)SRAM_ADDR_BEGIN, SRAM_SIZE);
 		println("Enabled heap on SRAM");
