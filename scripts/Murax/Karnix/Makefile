@@ -21,6 +21,9 @@ $(HEX): $(CSRC)
 
 generate: $(VERILOG) $(BIN)
 
+sim:
+	(cd ../../../; sbt "runMain vexriscv.demo.Murax_karnix_Sim")
+
 $(VERILOG) $(BIN): $(HEX) $(VEXRISCV)
 	(cd ../../..; sbt "runMain vexriscv.demo.Murax_karnix")
 
