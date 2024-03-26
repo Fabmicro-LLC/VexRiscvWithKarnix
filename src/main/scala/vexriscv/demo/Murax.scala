@@ -612,7 +612,7 @@ object Murax_karnix{
 object MuraxForTangnano9K{
   def main(args: Array[String]) {
     val hex = "src/main/c/murax/hello_world/build/hello_world.hex"
-    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 25.0 MHz, onChipRamSize = 32 kB, onChipRamHexFile = hex)))
+    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 26.9 MHz, onChipRamSize = 128 kB, onChipRamHexFile = hex)))
   }
 }
 
