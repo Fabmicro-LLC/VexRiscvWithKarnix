@@ -129,9 +129,9 @@ object MuraxConfig{
         rxDataWidth = 4
       ),
       rxDataWidth = 32,
-      rxBufferByteSize = 4096,
+      rxBufferByteSize = 2048,
       txDataWidth = 32,
-      txBufferByteSize = 4096
+      txBufferByteSize = 2048 
     ),
     uartCtrlConfig = UartCtrlMemoryMappedConfig(
       uartCtrlConfig = UartCtrlGenerics(
@@ -186,7 +186,7 @@ case class Murax(config : MuraxConfig) extends Component{
     //Peripherals IO
     val gpioA = master(TriStateArray(gpioWidth bits))
     val uart = master(Uart())
-    val mii = master(Mii(MiiParameter(MiiTxParameter(dataWidth = config.macConfig.phy.txDataWidth, withEr = false), MiiRxParameter( dataWidth = config.macConfig.phy.rxDataWidth))))
+    //val mii = master(Mii(MiiParameter(MiiTxParameter(dataWidth = config.macConfig.phy.txDataWidth, withEr = false), MiiRxParameter( dataWidth = config.macConfig.phy.rxDataWidth))))
 
     val xip = ifGen(genXip)(master(SpiXdrMaster(xipConfig.ctrl.spi)))
 
@@ -349,10 +349,12 @@ case class Murax(config : MuraxConfig) extends Component{
     plic.setIRQ(uartCtrl.io.interrupt, 0)
     apbMapping += uartCtrl.io.apb  -> (0x10000, 4 kB)
 
+    /*
     val macCtrl = new Apb3MacEthCtrl(macConfig)
     apbMapping += macCtrl.io.apb     -> (0x70000, 64 kB)
     macCtrl.io.mii <> io.mii
     plic.setIRQ(macCtrl.io.interrupt, 2)
+    */
 
     val timer = new MuraxApb3Timer()
     //timerInterrupt setWhen(timer.io.interrupt)
@@ -604,6 +606,13 @@ object Murax_karnix{
   def main(args: Array[String]) {
     val hex = "src/main/c/murax/hello_world/build/hello_world.hex"
     SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 75.5 MHz, onChipRamSize = 96 kB, onChipRamHexFile = hex)))
+  }
+}
+
+object MuraxForTangnano9K{
+  def main(args: Array[String]) {
+    val hex = "src/main/c/murax/hello_world/build/hello_world.hex"
+    SpinalVerilog(Murax(MuraxConfig.default(false).copy(coreFrequency = 25.0 MHz, onChipRamSize = 32 kB, onChipRamHexFile = hex)))
   }
 }
 
