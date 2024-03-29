@@ -90,7 +90,8 @@ ctors_done:
 
   li a0, 0x880     //880 enable timer + external interrupts
   csrw mie,a0
-  li a0, 0x1808     //1808 enable interrupts
+  //li a0, 0x1808     //1808 enable interrupts
+  li a0, 0x3808     //2808 - enable FPU, enable Machine mode, enable Machine interrupts
   csrw mstatus,a0
 
   call main

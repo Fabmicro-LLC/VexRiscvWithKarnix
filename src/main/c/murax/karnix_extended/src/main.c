@@ -201,6 +201,7 @@ int sram_test_write_random_ints(void) {
 		}
 		mem++;
 		fill += 0xdeadbeef; // generate pseudo-random data
+		break;
 	}
 
 	if((unsigned int)mem == SRAM_ADDR_END)
@@ -214,6 +215,11 @@ void main() {
 
 	unsigned int n;
 	char str[128];
+
+	println("FCSR: ");
+	to_hex(str, csr_read(fcsr));
+	println(str);
+
 
 	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during hardware init
 
@@ -380,7 +386,6 @@ void main() {
 	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts
 
 
-
 	// Dispay current Modbus and IP settings
 	if(1) {
 		char txt[32];
@@ -425,6 +430,8 @@ void main() {
 		printf("Failed to allocate ring_buffer!\r\n");
 	}
 
+	float x = 1.1;
+
 	while(1) {
 		int audio_idx = 0;
 
@@ -446,6 +453,10 @@ void main() {
 			plic_print_stats();
 
 			mac_print_stats();
+
+			printf("Double float: %f\r\n", x);
+
+			x = x + 0.1;
 
 		}
 	
@@ -552,9 +563,13 @@ static char crash_str[16];
 void crash(int cause) {
 	
 
-	to_hex(crash_str, cause);
 
 	print("\r\n*** TRAP: ");
+	to_hex(crash_str, cause);
+	print(crash_str);
+	print(" at ");
+
+	to_hex(crash_str, csr_read(mepc));
 	print(crash_str);
 	print("\r\n");
 

@@ -11,7 +11,7 @@ OUTPUT_ARCH(riscv)
 ENTRY(crtStart)
 
 MEMORY {
-  RAM      (rwx): ORIGIN = 0x80000000, LENGTH = 96k
+  RAM      (rwx): ORIGIN = 0x80000000, LENGTH = 86k
 }
 
 _stack_size = DEFINED(_stack_size) ? _stack_size : 4096;

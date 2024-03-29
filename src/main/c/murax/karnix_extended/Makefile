@@ -1,7 +1,8 @@
 PROJ_NAME=karnix_extended
 DEBUG=no
 BENCH=no
-MULDIV=no
+MULDIV=yes
+FPU=yes
 
 LWIPDIR=./src/lwip
 
@@ -44,9 +45,15 @@ endif
 ifeq ($(COMPRESSED),yes)
 	MARCH := $(MARCH)ac
 endif
+ifeq ($(FPU),yes)
+	MARCH := $(MARCH)f
+	#MABI := $(MABI)f
+	MABI := $(MABI)f
+endif
 
 CFLAGS += -Os -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
 LDFLAGS += -march=$(MARCH)  -mabi=$(MABI) -specs=nano.specs -lnosys -lc_nano
+#LDFLAGS += -march=rv32im -mabi=ilp32 -specs=nano.specs -lnosys -lc_nano
 
 
 
