@@ -456,7 +456,7 @@ class Hub75Transfer(max_planes: Int = 8) extends Component {
 
 
 
-class Apb3HubCtrl(max_width: Int = 64, max_height: Int = 64, color_bits: Int = 8, max_planes: Int = 8) extends Component {
+class Apb3HubCtrl(max_width: Int = 80, max_height: Int = 40, color_bits: Int = 8, max_planes: Int = 8) extends Component {
 	val io = new Bundle {
 		val apb = slave( Apb3( addressWidth = 16, dataWidth = 32))
 		val output = out Bits (16 bits)
