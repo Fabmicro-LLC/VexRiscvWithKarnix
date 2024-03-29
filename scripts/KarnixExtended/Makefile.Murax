@@ -1,0 +1,61 @@
+
+
+VERILOG = ../../../MuraxForKarnixExtendedTopLevel.v
+
+generate: ../../../MuraxForKarnixExtendedTopLevel_random.hexx
+	(cd ../../..; sbt "runMain vexriscv.demo.MuraxForKarnixExtendedVerilog")
+
+sim:
+	(cd ../../..; sbt "runMain vexriscv.demo.MuraxForKarnixExtendedVerilogSim")
+
+hexx2bin: hexx2bin.c
+	cc -o $@ $^
+
+../../../MuraxForKarnixExtendedTopLevel_random.hexx: hexx2bin
+	ecpbram -g ../../../MuraxForKarnixExtendedTopLevel_random.hexx -w 32 -d 24576 # 96K RAM 
+	#ecpbram -g ../../../MuraxForKarnixExtendedTopLevel_random.hexx -w 32 -d 21504  # 86K RAM 
+	#ecpbram -g ../../../MuraxForKarnixExtendedTopLevel_random.hexx -w 32 -d 18432 # 72K RAM 
+	#ecpbram -g ../../../MuraxForKarnixExtendedTopLevel_random.hexx -w 32 -d 17920 # 70K RAM
+	#ecpbram -g ../../../MuraxForKarnixExtendedTopLevel_random.hexx -w 32 -d 16384 
+	#ecpbram -g ../../../MuraxForKarnixExtendedTopLevel_random.hexx -w 32 -d 5120 
+	./hexx2bin < ../../../MuraxForKarnixExtendedTopLevel_random.hexx > ../../../MuraxForKarnixExtendedTopLevel_random.bin
+	objcopy -v -O ihex -I binary --set-start 0x80000000 --change-addresses 0x80000000 ../../../MuraxForKarnixExtendedTopLevel_random.bin ../../../MuraxForKarnixExtendedTopLevel_random.hex
+	#sed 's/^:10/:00/' < ../../../MuraxForKarnixExtendedTopLevel_random.he > ../../../MuraxForKarnixExtendedTopLevel_random.hex
+
+../../../MuraxForKarnixExtendedTopLevel.v :
+	(cd ../../..; sbt "runMain vexriscv.demo.MuraxForKarnixExtendedVerilog")
+
+
+../../../src/main/c/murax/karnix_extended/build/karnix_extended.hexx:
+	(cd ../../../src/main/c/murax/karnix_extended; $(MAKE))
+
+
+../../../MuraxForKarnixExtendedTopLevel.v*.bin: ../../../src/main/c/murax/karnix_extended/build/karnix_extended.hexx
+
+
+bin/MuraxForKarnixExtendedTopLevel.json : ${VERILOG} ../../../MuraxForKarnixExtendedTopLevel.v*.bin
+	mkdir -p bin
+	yosys -v2 -p "synth_ecp5 -abc2 -top MuraxForKarnixExtendedTopLevel -json bin/MuraxForKarnixExtendedTopLevel.json" ${VERILOG}
+	#yosys -v2 -e ABC -p "synth_ecp5 -abc9 -top MuraxForKarnixExtendedTopLevel -json bin/MuraxForKarnixExtendedTopLevel.json" ${VERILOG}
+
+bin/MuraxForKarnixExtendedTopLevel_random_25F.config : karnix_cabga256.lpf bin/MuraxForKarnixExtendedTopLevel.json
+	nextpnr-ecp5 --seed 1133 --speed 6 --25k --lpf karnix_cabga256.lpf --placed-svg bin/MuraxForKarnixExtendedTopLevel_placed.svg --package CABGA256 --json bin/MuraxForKarnixExtendedTopLevel.json --textcfg $@ 
+
+bin/MuraxForKarnixExtendedTopLevel_25F.config: bin/MuraxForKarnixExtendedTopLevel_random_25F.config ../../../src/main/c/murax/karnix_extended/build/karnix_extended.hexx ../../../MuraxForKarnixExtendedTopLevel_random.hexx
+	ecpbram -v -i bin/MuraxForKarnixExtendedTopLevel_random_25F.config -o bin/MuraxForKarnixExtendedTopLevel_25F.config -f ../../../MuraxForKarnixExtendedTopLevel_random.hexx -t ../../../src/main/c/murax/karnix_extended/build/karnix_extended.hexx
+
+bin/MuraxForKarnixExtendedTopLevel_25F.bit : bin/MuraxForKarnixExtendedTopLevel_25F.config
+	ecppack --svf bin/MuraxForKarnixExtendedTopLevel_25F.svf  bin/MuraxForKarnixExtendedTopLevel_25F.config bin/MuraxForKarnixExtendedTopLevel_25F.bit
+
+compile : bin/MuraxForKarnixExtendedTopLevel_25F.bit
+
+prog_25F : bin/MuraxForKarnixExtendedTopLevel_25F.bit
+	ecpprog bin/MuraxForKarnixExtendedTopLevel_25F.bit
+
+clean :
+	rm -f bin/* ../../../MuraxForKarnixExtendedTopLevel*
+
+gdb:
+	$(GDB) -b 115200 -ex "set debug remote 1" -ex "target remote /dev/ttyUSB0" ../../../src/main/c/murax/karnix_extended/build/karnix_extended.elf 
+
+
