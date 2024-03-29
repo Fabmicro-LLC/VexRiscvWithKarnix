@@ -49,7 +49,7 @@ import mylib.Apb3WatchDogCtrl
 
 	Written by Ruslan Zalata <rz@fabmicro.ru>
 
-	(C) 2021-2023 Fabmicro, LLC., Tyumen, Russia.
+	(C) 2021-2024 Fabmicro, LLC., Tyumen, Russia.
 
 */
 
@@ -95,26 +95,6 @@ object MuraxForKarnixExtendedConfig{
     hardwareBreakpointCount = if(withXip) 3 else 0,
     cpuPlugins = ArrayBuffer( //DebugPlugin added by the toplevel
 
-      /*
-        new IBusCachedPlugin(
-          resetVector = if(withXip) 0xF001E000l else 0x80000000l,
-          prediction = STATIC,
-          config = InstructionCacheConfig(
-            cacheSize = 1024,
-            bytePerLine = 32,
-            wayCount = 1,
-            addressWidth = 32,
-            cpuDataWidth = 32,
-            memDataWidth = 32,
-            catchIllegalAccess = false,
-            catchAccessFault = false,
-            asyncTagMemory = false,
-            twoCycleRam = false, 
-            twoCycleCache = true 
-          )
-        ),
-      */
-
       new IBusSimplePlugin(
         resetVector = if(withXip) 0xF001E000l else 0x80000000l,
         cmdForkOnSecondStage = true,
@@ -135,7 +115,7 @@ object MuraxForKarnixExtendedConfig{
       new CsrPlugin(CsrPluginConfig.smallest(mtvecInit = if(withXip) 0xE0040020l else 0x80000020l)),
 
       new DecoderSimplePlugin(
-        catchIllegalInstruction = false,
+        catchIllegalInstruction = true,
 	assertIllegalInstruction = false 
       ),
       new RegFilePlugin(
@@ -242,6 +222,7 @@ object MuraxForKarnixExtendedConfig{
     )
 //    config.cpuPlugins(config.cpuPlugins.indexWhere(_.isInstanceOf[LightShifterPlugin])) = new FullBarrelShifterPlugin()
 
+
     config
   }
 }
@@ -249,7 +230,7 @@ object MuraxForKarnixExtendedConfig{
 
 
 
-case class MuraxHUBFabric(config : MuraxForKarnixExtendedConfig) extends Component{
+case class MuraxForKarnixExtended(config : MuraxForKarnixExtendedConfig) extends Component{
   import config._
 
   val io = new Bundle {
@@ -341,10 +322,6 @@ case class MuraxHUBFabric(config : MuraxForKarnixExtendedConfig) extends Compone
 
 
     for(plugin <- cpu.plugins) plugin match{
-      case plugin : IBusCachedPlugin => {
-        mainBusArbiter.io.iBus.toPipelinedMemoryBus() <> plugin.iBus.toPipelinedMemoryBus()
-        // This does not compile
-      }
       case plugin : IBusSimplePlugin => {
         mainBusArbiter.io.iBus.cmd <> plugin.iBus.cmd
         mainBusArbiter.io.iBus.rsp <> plugin.iBus.rsp
@@ -495,7 +472,7 @@ case class MuraxHUBFabric(config : MuraxForKarnixExtendedConfig) extends Compone
 
 
 
-case class MuraxForKarnixExtended() extends Component{
+case class MuraxForKarnixExtendedTopLevel() extends Component{
     val io = new Bundle {
 	val clk25 = in Bool()
 	val uart_debug_txd = out Bool() // mapped to uart_debug_txd
@@ -545,7 +522,7 @@ case class MuraxForKarnixExtended() extends Component{
 
 
 
-    val murax = MuraxHUBFabric(MuraxForKarnixExtendedConfig.default(withXip = false).copy(
+    val murax = MuraxForKarnixExtended(MuraxForKarnixExtendedConfig.default(withXip = false).copy(
 		coreFrequency = 65.0 MHz, 
 		onChipRamSize = 96 kB , 
 		pipelineMainBus = true, // XXX
@@ -663,7 +640,7 @@ case class MuraxForKarnixExtended() extends Component{
 
 object MuraxForKarnixExtendedVerilog{
   def main(args: Array[String]) {
-    SpinalVerilog(MuraxForKarnixExtended().setDefinitionName("MuraxForKarnixExtendedTopLevel"))
+    SpinalVerilog(MuraxForKarnixExtendedTopLevel().setDefinitionName("MuraxForKarnixExtendedTopLevel"))
   }
 }
 
@@ -677,7 +654,7 @@ object MuraxForKarnixExtendedVerilogSim {
 
     //SimConfig.withWave.compile{
     SimConfig.compile{
-        val dut = new MuraxHUBFabric(MuraxForKarnixExtendedConfig.default(withXip = false).copy(
+        val dut = new MuraxForKarnixExtended(MuraxForKarnixExtendedConfig.default(withXip = false).copy(
                 coreFrequency = 65.0 MHz,
                 onChipRamSize = 96 kB ,
                 //pipelineMainBus = true,
