@@ -454,10 +454,9 @@ void main() {
 
 			mac_print_stats();
 
-			printf("Double float: %f\r\n", x);
+			printf("Float X = %d\r\n", (int)(x*10.0));
 
 			x = x + 0.1;
-
 		}
 	
 		//sram_test_write_shorts();

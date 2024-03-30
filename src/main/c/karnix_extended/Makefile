@@ -49,6 +49,7 @@ ifeq ($(FPU),yes)
 	MARCH := $(MARCH)f
 	#MABI := $(MABI)f
 	MABI := $(MABI)f
+	#CFLAGS += -u _printf_float
 endif
 
 CFLAGS += -Os -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
