@@ -32,7 +32,7 @@ This SoC is based on VexRiscv RV32IM ISA in the following configurations:
 - SPI controller connected to AudioDAC
 - HUB12/HUB75 interface controller
 
-Fmax = 58 MHz
+Fmax = 65 MHz
 
 # BrieyForKarnix SoC
 
@@ -54,5 +54,5 @@ This SoC is based on VexRiscv RV32IMF ISA in the following configurations:
 - SPI controller connected to AudioDAC
 - HUB12/HUB75 interface controller
 
-Fmax = 62 MHz
+Fmax = 65 MHz
 
