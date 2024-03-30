@@ -171,7 +171,7 @@ object BrieyForKarnixConfig{
           catchIllegalInstruction = true
         ),
         new RegFilePlugin(
-          regFileReadyKind = plugin.ASYNC,
+          regFileReadyKind = plugin.SYNC,
           zeroBoot = false
         ),
         new IntAluPlugin,
@@ -510,7 +510,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 62.0 MHz, 
+		axiFrequency = 65.0 MHz, 
 		onChipRamSize = 86 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
@@ -549,9 +549,9 @@ case class BrieyForKarnixTopLevel() extends Component{
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 16, opDiv = 7, opCPhase = 3) ) // 80.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 3, opDiv = 8, opCPhase = 4) ) // 75.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
-    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 13, opDiv = 9, opCPhase = 4) ) // 65.0 MHz
+    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 13, opDiv = 9, opCPhase = 4) ) // 65.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 12, opDiv = 10, opCPhase = 4) ) // 60.0 MHz
-    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 6, fbDiv = 15, opDiv = 10, opCPhase = 4) ) // 62.0 MHz
+    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 6, fbDiv = 15, opDiv = 10, opCPhase = 4) ) // 62.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 3, fbDiv = 7, opDiv = 11, opCPhase = 5) ) // 58.0 MHz
 
     core_pll.io.CLKI := io.clk25
