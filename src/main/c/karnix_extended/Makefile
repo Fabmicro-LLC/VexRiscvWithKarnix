@@ -3,6 +3,7 @@ DEBUG=no
 BENCH=no
 MULDIV=yes
 FPU=yes
+COMPRESSED=yes
 
 LWIPDIR=./src/lwip
 
@@ -42,14 +43,14 @@ MARCH := rv32i
 ifeq ($(MULDIV),yes)
 	MARCH := $(MARCH)m
 endif
-ifeq ($(COMPRESSED),yes)
-	MARCH := $(MARCH)ac
-endif
 ifeq ($(FPU),yes)
 	MARCH := $(MARCH)f
 	#MABI := $(MABI)f
 	MABI := $(MABI)f
 	#CFLAGS += -u _printf_float
+endif
+ifeq ($(COMPRESSED),yes)
+	MARCH := $(MARCH)c
 endif
 
 CFLAGS += -Os -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
