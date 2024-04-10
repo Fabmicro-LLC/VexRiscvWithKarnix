@@ -172,44 +172,68 @@ int sram_test_write_shorts(void) {
 }
 */
 
-int sram_test_write_random_ints(void) {
+int sram_test_write_random_ints(int interations) {
 	volatile unsigned int *mem;
 	unsigned int fill;
 	int fails = 0;
 
-	fill = 0xdeadbeef;
-	mem = (unsigned int*) SRAM_ADDR_BEGIN;
+	for(int i = 0; i < interations; i++) {
+		fill = 0xdeadbeef + i;
+		mem = (unsigned int*) SRAM_ADDR_BEGIN;
 
-	printf("Filling SRAM at: %p, size: %d bytes...\r\n", mem, SRAM_SIZE);
+		printf("Filling SRAM at: %p, size: %d bytes...\r\n", mem, SRAM_SIZE);
 
-	while((unsigned int)mem < SRAM_ADDR_END) {
-		*mem++ = fill;
-		fill += 0xdeadbeef; // generate pseudo-random data
-	}
-
-	fill = 0xdeadbeef;
-	mem = (unsigned int*) SRAM_ADDR_BEGIN;
-
-	printf("Checking SRAM at: %p, size: %d bytes...\r\n", mem, SRAM_SIZE);
-
-	while((unsigned int)mem < SRAM_ADDR_END) {
-		if(*mem != fill) {
-			printf("SRAM check failed at: %p, expected: %p, got: %p\r\n", mem, fill, *mem);
-			fails++;
-		} else {
-			//printf("\r\nMem check OK     at: %p, expected: %p, got: %p\r\n", mem, fill, *mem);
+		while((unsigned int)mem < SRAM_ADDR_END) {
+			*mem++ = fill;
+			fill += 0xdeadbeef; // generate pseudo-random data
 		}
-		mem++;
-		fill += 0xdeadbeef; // generate pseudo-random data
-		break;
-	}
 
-	if((unsigned int)mem == SRAM_ADDR_END)
-		printf("SRAM Fails: %d\r\n", fails);
+		fill = 0xdeadbeef + i;
+		mem = (unsigned int*) SRAM_ADDR_BEGIN;
+
+		printf("Checking SRAM at: %p, size: %d bytes...\r\n", mem, SRAM_SIZE);
+
+		while((unsigned int)mem < SRAM_ADDR_END) {
+			if(*mem != fill) {
+				printf("SRAM check failed at: %p, expected: %p, got: %p\r\n", mem, fill, *mem);
+				fails++;
+			} else {
+				//printf("\r\nMem check OK     at: %p, expected: %p, got: %p\r\n", mem, fill, *mem);
+			}
+			mem++;
+			fill += 0xdeadbeef; // generate pseudo-random data
+			break;
+		}
+
+		if((unsigned int)mem == SRAM_ADDR_END)
+			printf("SRAM Fails: %d\r\n", fails);
+
+		if(fails)
+			break;
+	}
 
 	return fails++;
 }
 
+volatile unsigned char* xxx = (unsigned char*)0x90000000;
+
+void test_byte_access(void) {
+
+	for(int i = 0; i < 32; i++) {
+		*(xxx++) = i;
+		*(xxx++) = 0xbb;
+		*(xxx++) = 0xcc;
+		*(xxx++) = 0xdd;
+		printf("TEST WRITE[%d]: %p\r\n", i, xxx);
+	}
+
+	xxx = (unsigned char*)0x90000000;
+
+	for(int i = 0; i < 32; i++) {
+		printf("TEST READ[%d]: 0x%08x, %p\r\n", i, *(unsigned int*)xxx, xxx);
+		xxx += 4;
+	}
+}
 
 void main() {
 
@@ -275,12 +299,14 @@ void main() {
 	printf("Hardware init\r\n");
 
 	// Test SRAM and initialize heap for malloc to use SRAM if tested OK
-	if(sram_test_write_random_ints() == 0) {
+	if(sram_test_write_random_ints(10) == 0) {
 		printf("Enabling SRAM...\r\n");
 		init_sbrk((unsigned int*)SRAM_ADDR_BEGIN, SRAM_SIZE);
 		printf("SRAM %s!\r\n", "enabled"); 
 		// If this prints, we are running with new heap all right
 		// Note, that some garbage can be printed along, that's ok!
+
+		//test_byte_access();
 	} else {
 		printf("SRAM %s!\r\n", "disabled"); 
 	}
@@ -429,6 +455,7 @@ void main() {
 	} else {
 		printf("Failed to allocate ring_buffer!\r\n");
 	}
+
 
 	float x = 1.1;
 

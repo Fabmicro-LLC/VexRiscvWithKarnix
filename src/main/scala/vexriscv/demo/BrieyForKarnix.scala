@@ -23,8 +23,8 @@ import scala.collection.Seq
 
 import vexriscv.ip.fpu._
 import spinal.lib.blackbox.lattice.ecp5._
+import mylib.{SramLayout, SramInterface, Axi4SharedToSram}
 import mylib.{Pwm,Apb3PwmCtrl}
-import mylib.{SramInterface,SramLayout,PipelinedMemoryBusSram}
 import mylib.{Apb3MicroI2CCtrl, MicroI2CInterface}
 import mylib.Apb3MachineTimer
 import mylib.Apb3HubCtrl
@@ -258,7 +258,7 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     val mii = master(Mii(MiiParameter(MiiTxParameter(dataWidth = config.macConfig.phy.txDataWidth, withEr = false), MiiRxParameter( dataWidth = config.macConfig.phy.rxDataWidth))))
     val i2c = MicroI2CInterface()
     val hard_reset = out Bool()
-    //val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
+    val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
   }
 
   val resetCtrlClockDomain = ClockDomain(
@@ -307,6 +307,15 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
       idWidth = 4
     )
     HexTools.initRam(ram.ram, onChipRamHexFile, 0x80000000l)
+
+    val sram = Axi4SharedToSram(
+      addressAxiWidth = 32,
+      dataWidth    = 32,
+      idWidth      = 4,
+      addressSRAMWidth = 18,
+      dataSRAMWidth = 16
+    )
+    sram.io.sram <> io.sram
 
     val apbBridge = Axi4SharedToApb3Bridge(
       addressWidth = 20,
@@ -391,27 +400,20 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     }
 
 
-    //val sramCtrl = new PipelinedMemoryBusSram(
-    //  pipelinedMemoryBusConfig = pipelinedMemoryBusConfig,
-    //  sramLayout = SramLayout(addressWidth = 18, dataWidth = 16)
-    //)
-    //sramCtrl.io.sram <> io.sram
-
     val axiCrossbar = Axi4CrossbarFactory()
 
     axiCrossbar.addSlaves(
-      ram.io.axi       -> (0x80000000L,   onChipRamSize),
-      //sramCtrl.io.bus -> (0x90000000L,   sramCtrl.sramLayout.capacity),
-      apbBridge.io.axi -> (0xF0000000L,  1 MB)
+      ram.io.axi       -> (0x80000000L, onChipRamSize),
+      sram.io.axi      -> (0x90000000L, sram.sramLayout.capacity * sram.sramLayout.dataWidth / 8),
+      apbBridge.io.axi -> (0xF0000000L, 1 MB)
     )
 
     axiCrossbar.addConnections(
-      //core.iBus       -> List(ram.io.axi, sdramCtrl.io.axi),
-      //core.dBus       -> List(ram.io.axi, sdramCtrl.io.axi, apbBridge.io.axi)
-      core.iBus       -> List(ram.io.axi),
-      core.dBus       -> List(ram.io.axi, apbBridge.io.axi)
+      core.iBus       -> List(ram.io.axi, sram.io.axi),
+      core.dBus       -> List(ram.io.axi, sram.io.axi, apbBridge.io.axi)
+      //core.iBus       -> List(ram.io.axi),
+      //core.dBus       -> List(ram.io.axi, apbBridge.io.axi)
     )
-
 
     axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar,bridge) => {
       crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
@@ -427,6 +429,13 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
       crossbar.readRsp               <<  ctrl.readRsp
     })
 
+    axiCrossbar.addPipelining(sram.io.axi)((crossbar,ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <<  ctrl.writeRsp
+      crossbar.readRsp               <<  ctrl.readRsp
+    })
+
     axiCrossbar.addPipelining(core.dBus)((cpu,crossbar) => {
       cpu.sharedCmd             >>  crossbar.sharedCmd
       cpu.writeData             >>  crossbar.writeData
@@ -435,7 +444,6 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     })
 
     axiCrossbar.build()
-
 
     val apbDecoder = Apb3Decoder(
       master = apbBridge.io.apb,
@@ -498,7 +506,7 @@ case class BrieyForKarnixTopLevel() extends Component{
 	val i2c_scl = inout(Analog(Bool()))
 	val i2c_sda = inout(Analog(Bool()))
 
-        //val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
+        val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
         val spiAudioDAC = master(SpiMaster(ssWidth = 1))
         
 	val config = in Bool() // Config reset pin
@@ -510,7 +518,8 @@ case class BrieyForKarnixTopLevel() extends Component{
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 65.0 MHz, 
+		axiFrequency = 62.0 MHz, 
+		//axiFrequency = 50.0 MHz, 
 		onChipRamSize = 86 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
@@ -549,9 +558,9 @@ case class BrieyForKarnixTopLevel() extends Component{
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 16, opDiv = 7, opCPhase = 3) ) // 80.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 3, opDiv = 8, opCPhase = 4) ) // 75.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
-    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 13, opDiv = 9, opCPhase = 4) ) // 65.0 MHz
+    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 13, opDiv = 9, opCPhase = 4) ) // 65.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 12, opDiv = 10, opCPhase = 4) ) // 60.0 MHz
-    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 6, fbDiv = 15, opDiv = 10, opCPhase = 4) ) // 62.0 MHz
+    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 6, fbDiv = 15, opDiv = 10, opCPhase = 4) ) // 62.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 3, fbDiv = 7, opDiv = 11, opCPhase = 5) ) // 58.0 MHz
 
     core_pll.io.CLKI := io.clk25
@@ -615,7 +624,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     briey.io.uart1.rxd <> io.rs485_rxd
     briey.io.uart1.de <> io.rs485_de
 
-    //briey.io.sram <> io.sram
+    briey.io.sram <> io.sram
     briey.io.spiAudioDAC <> io.spiAudioDAC
 
     io.i2c_scl <> briey.io.i2c.scl
