@@ -254,4 +254,21 @@ IOBUF PORT "io_core_jtag_tdi" IO_TYPE=LVCMOS33;
 LOCATE COMP "io_core_jtag_tdo" SITE "K2";	# CORE JTAG TDO
 IOBUF PORT "io_core_jtag_tdo" IO_TYPE=LVCMOS33;
 
+LOCATE COMP "io_hdmi_tmds_p[0]" SITE "A11";
+IOBUF PORT "io_hdmi_tmds_p[0]" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_hdmi_tmds_p[1]" SITE "D11";
+IOBUF PORT "io_hdmi_tmds_p[1]" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_hdmi_tmds_p[2]" SITE "B11";
+IOBUF PORT "io_hdmi_tmds_p[2]" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_hdmi_tmds_n[0]" SITE "A12";
+IOBUF PORT "io_hdmi_tmds_n[0]" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_hdmi_tmds_n[1]" SITE "E11";
+IOBUF PORT "io_hdmi_tmds_n[1]" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_hdmi_tmds_n[2]" SITE "C11";
+IOBUF PORT "io_hdmi_tmds_n[2]" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_hdmi_tmds_clk_p" SITE "B12";
+IOBUF PORT "io_hdmi_tmds_clk_p" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_hdmi_tmds_clk_n" SITE "C12";
+IOBUF PORT "io_hdmi_tmds_clk_n" IO_TYPE=LVCMOS33;
+
 
