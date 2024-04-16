@@ -26,6 +26,7 @@ import spinal.lib.blackbox.lattice.ecp5._
 import mylib.{SramLayout, SramInterface, Axi4SharedToSram}
 import mylib.{Pwm,Apb3PwmCtrl}
 import mylib.{Apb3MicroI2CCtrl, MicroI2CInterface}
+import mylib.{HDMIInterface, Apb3CGA4HDMICtrl}
 import mylib.Apb3MachineTimer
 import mylib.Apb3HubCtrl
 import mylib.Apb3MicroPLICCtrl
@@ -112,8 +113,8 @@ object BrieyForKarnixConfig{
           timerWidth     = 16,
           ssWidth        = 1 // only one CS line
         ),
-        cmdFifoDepth = 512, // CMD is same as TX FIFO
-        rspFifoDepth = 512  // RSP is same as RX FIFO
+        cmdFifoDepth = 256, // CMD is same as TX FIFO
+        rspFifoDepth = 256  // RSP is same as RX FIFO
       ),
 
       cpuPlugins = ArrayBuffer(
@@ -128,7 +129,7 @@ object BrieyForKarnixConfig{
           compressedGen = true,
           injectorStage = true,
           config = InstructionCacheConfig(
-            cacheSize = 1024,
+            cacheSize = 2048,
             bytePerLine = 32,
             wayCount = 1,
             addressWidth = 32,
@@ -151,7 +152,7 @@ object BrieyForKarnixConfig{
         //                    ),
         new DBusCachedPlugin(
           config = new DataCacheConfig(
-            cacheSize         = 1024,
+            cacheSize         = 2048,
             bytePerLine       = 32,
             wayCount          = 1,
             addressWidth      = 32,
@@ -173,7 +174,7 @@ object BrieyForKarnixConfig{
           catchIllegalInstruction = true
         ),
         new RegFilePlugin(
-          regFileReadyKind = plugin.SYNC,
+          regFileReadyKind = plugin.ASYNC,
           zeroBoot = false
         ),
         new IntAluPlugin,
@@ -252,15 +253,19 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
 
     //Peripherals IO
     val gpioA = master(TriStateArray(32 bits))
+    //val gpioB = inout(TriStateArray(Bits(16 bits)))
     val uart0 = master(Uart(config.uart0CtrlConfig.uartCtrlConfig))
     val uart1 = master(Uart(config.uart1CtrlConfig.uartCtrlConfig))
     val spiAudioDAC = master(SpiMaster(ssWidth = config.spiAudioDACCtrlConfig.ctrlGenerics.ssWidth))
     val pwm = out Bool()
-    val hub = out Bits(16 bits)
+    //val hub = out Bits(16 bits)
     val mii = master(Mii(MiiParameter(MiiTxParameter(dataWidth = config.macConfig.phy.txDataWidth, withEr = false), MiiRxParameter( dataWidth = config.macConfig.phy.rxDataWidth))))
     val i2c = MicroI2CInterface()
     val hard_reset = out Bool()
     val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
+    val hdmi = master(HDMIInterface())
+    val pixclk = in Bool()
+    val pixclk_x10 = in Bool()
   }
 
   val resetCtrlClockDomain = ClockDomain(
@@ -331,6 +336,14 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     )
     gpioACtrl.io.gpio <> io.gpioA
 
+    /*
+    val gpioBCtrl = Apb3Gpio(
+      gpioWidth = 16,
+      withReadSync = true
+    )
+    gpioBCtrl.io.gpio <> io.gpioB
+    */
+
     val plic = new Apb3MicroPLICCtrl()
     plic.io.IRQLines := 0
 
@@ -368,8 +381,12 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     val pwmCtrl = new Apb3PwmCtrl(size = 32)
     io.pwm := pwmCtrl.io.output
 
-    val hubCtrl = new Apb3HubCtrl()
-    io.hub := hubCtrl.io.output
+    //val hubCtrl = new Apb3HubCtrl()
+    //io.hub := hubCtrl.io.output
+    val cgaCtrl = new Apb3CGA4HDMICtrl()
+    io.hdmi := cgaCtrl.io.hdmi
+    cgaCtrl.io.pixclk := io.pixclk
+    cgaCtrl.io.pixclk_x10 := io.pixclk_x10
 
 
     val machineTimer = Apb3MachineTimer(axiFrequency.toInt / 1000000)
@@ -451,13 +468,15 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
       master = apbBridge.io.apb,
       slaves = List(
         gpioACtrl.io.apb -> (0x00000, 4 kB),
+        //gpioBCtrl.io.apb -> (0x01000, 4 kB),
         uart0Ctrl.io.apb -> (0x10000, 4 kB),
         uart1Ctrl.io.apb -> (0x11000, 4 kB),
         timer0Ctrl.io.apb -> (0x20000, 4 kB),
         timer1Ctrl.io.apb -> (0x21000, 4 kB),
         sysTimerCtrl.io.apb -> (0x22000, 4 kB),
         pwmCtrl.io.apb -> (0x30000, 4 kB),
-        hubCtrl.io.apb -> (0x50000, 64 kB),
+        cgaCtrl.io.apb -> (0x40000, 64 kB),
+        //hubCtrl.io.apb -> (0x50000, 64 kB),
         plic.io.apb -> (0x60000, 64 kB),
         macCtrl.io.apb -> (0x70000, 64 kB),
         i2cCtrl.io.apb -> (0x90000, 64 kB),
@@ -478,7 +497,8 @@ case class BrieyForKarnixTopLevel() extends Component{
 	val uart_debug_rxd = in Bool() // mapped to uart_debug_rxd
 	val led = out Bits(3 bits)
 	val key = in Bits(4 bits)
-	val gpio = out Bits(16 bits)
+	//val gpio = out Bits(16 bits)
+        val gpio = inout(Analog(Bits(16 bits)))
 	val rst_n = out Bool() // Hard-reset pin
 	val eeprom_wp = out Bool()
 	val rs485_txd = out Bool() // mapped to uart_rs485_txd
@@ -517,12 +537,13 @@ case class BrieyForKarnixTopLevel() extends Component{
 	var core_jtag_tdi = in Bool()
 	var core_jtag_tdo = out Bool()
 	var core_jtag_tms = in Bool()
+
+        val hdmi = master(HDMIInterface())
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 58.0 MHz, 
-		//axiFrequency = 50.0 MHz, 
-		onChipRamSize = 86 kB , 
+		axiFrequency = 60.0 MHz, 
+		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
 	))
@@ -579,8 +600,24 @@ case class BrieyForKarnixTopLevel() extends Component{
     core_pll.io.PHASEDIR := False
     core_pll.io.PHASESTEP := False
     core_pll.io.PHASELOADREG := False
-
     briey.io.mainClk := core_pll.io.CLKOP 
+
+    val hdmi_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 10, opDiv = 2, opCPhase = 0) ) // 250.0 MHz
+    hdmi_pll.io.CLKI := io.clk25
+    hdmi_pll.io.CLKFB := hdmi_pll.io.CLKOP
+    hdmi_pll.io.STDBY := False
+    hdmi_pll.io.RST := False
+    hdmi_pll.io.ENCLKOP := True
+    hdmi_pll.io.ENCLKOS := False
+    hdmi_pll.io.ENCLKOS2 := False
+    hdmi_pll.io.ENCLKOS3 := False
+    hdmi_pll.io.PLLWAKESYNC := False
+    hdmi_pll.io.PHASESEL0 := False
+    hdmi_pll.io.PHASESEL1 := False
+    hdmi_pll.io.PHASEDIR := False
+    hdmi_pll.io.PHASESTEP := False
+    hdmi_pll.io.PHASELOADREG := False
+    briey.io.pixclk_x10 := hdmi_pll.io.CLKOP 
 
     /*
     case class DCCA() extends BlackBox{
@@ -617,7 +654,10 @@ case class BrieyForKarnixTopLevel() extends Component{
     briey.io.gpioA.read(30 downto 4) := 0
     briey.io.gpioA.read(31) := io.config 
 
-    io.gpio <> briey.io.hub
+    //io.gpio <> briey.io.hub
+    //io.gpio <> briey.io.gpioB
+    io.hdmi <> briey.io.hdmi
+    briey.io.pixclk := io.clk25
 
     briey.io.uart0.txd <> io.uart_debug_txd
     briey.io.uart0.rxd <> io.uart_debug_rxd

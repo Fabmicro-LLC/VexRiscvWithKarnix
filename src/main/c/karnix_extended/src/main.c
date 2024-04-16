@@ -107,7 +107,7 @@ void process_and_wait(uint32_t us) {
 			break;
 
 		// Process events
-
+		//
 		if(events_modbus_rtu_poll) {
 			modbus_rtu_poll(); 
 			events_modbus_rtu_poll = 0;
@@ -235,6 +235,28 @@ void test_byte_access(void) {
 	}
 }
 
+
+void cga_fill_screen(char color) {
+	uint32_t *fb = (uint32_t*) CGA->FB;
+	uint32_t filler = (color << 30) | (color << 28) | (color << 26) | (color << 24);
+		 filler |= (filler >> 8) | (filler >> 16) | (filler >> 24);
+
+	for(int i = 0; i < 320*240*2/32;  i++)
+		*fb++ = filler; 
+
+}
+
+void cga_test(void) {
+	uint32_t *fb = (uint32_t*) CGA->FB;
+	for(int i = 0; i < 2000;  i++)
+		*fb++ = 0x55555555; 
+	for(int i = 0; i < 2000;  i++)
+		*fb++ = 0xaaaaaaaa; 
+	for(int i = 0; i < 800;  i++)
+		*fb++ = 0xffffffff; 
+
+}
+
 void main() {
 
 	unsigned int n;
@@ -246,6 +268,8 @@ void main() {
 
 
 	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during hardware init
+
+	cga_fill_screen(1); // 1 - yellow 
 
 	init_sbrk(NULL, 0); // Initialize heap for malloc to use on-chip RAM
 
@@ -312,7 +336,7 @@ void main() {
 	}
 
 	// Disable HUB controller
-	HUB0->CONTROL = 0;
+	//HUB0->CONTROL = 0;
 
 	// Enable writes to EEPROM
 	GPIO->OUTPUT &= ~(1 << EEPROM_WP); 
@@ -390,7 +414,7 @@ void main() {
 	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during hardware init
 
 	// Intialize and configure HUB controller
-	hub_init(active_config.hub_type);
+	//hub_init(active_config.hub_type);
 
 	// Configure network stuff 
 	mac_lwip_init(); // Initiazlier MAC controller and LWIP stack, also add network interface
@@ -413,7 +437,7 @@ void main() {
 
 
 	// Dispay current Modbus and IP settings
-	if(1) {
+	if(0) {
 		char txt[32];
 		int len;
 
@@ -484,8 +508,10 @@ void main() {
 			printf("Float X = %d\r\n", (int)(x*10.0));
 
 			x = x + 0.1;
+
 		}
 	
+		cga_test();
 		//sram_test_write_shorts();
 		//sram_test_write_random_ints();
 
@@ -543,6 +569,13 @@ void externalInterrupt(void){
 		PLIC->PENDING &= ~PLIC_IRQ_UART0;
 	}
 
+
+	if(PLIC->PENDING & PLIC_IRQ_I2C) { // I2C xmit complete 
+		//print("I2C IRQ\r\n");
+		PLIC->PENDING &= ~PLIC_IRQ_I2C;
+	}
+
+
 	if(PLIC->PENDING & PLIC_IRQ_UART1) { // UART1 is pending
 		//printf("UART1: %02X (%c)\r\n", c, c);
 		events_modbus_rtu_rx++;
@@ -569,12 +602,7 @@ void externalInterrupt(void){
 		PLIC->PENDING &= ~PLIC_IRQ_TIMER1;
 	}
 
-	if(PLIC->PENDING & PLIC_IRQ_I2C) { // I2C xmit complete 
-		//print("I2C IRQ\r\n");
-		PLIC->PENDING &= ~PLIC_IRQ_I2C;
-	}
-
-	if(PLIC->PENDING & PLIC_IRQ_AUDIODAC0) { // MAC is pending
+	if(PLIC->PENDING & PLIC_IRQ_AUDIODAC0) { // AUDIODAC is pending
 		//print("AUDIODAC IRQ\r\n");
 		audiodac0_irqs++;
 		audiodac0_samples_sent += audiodac0_isr();
