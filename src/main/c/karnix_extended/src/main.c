@@ -247,6 +247,14 @@ void cga_fill_screen(char color) {
 }
 
 void cga_test(void) {
+
+	CGA->PALETTE[0] = 0x00000000;
+	CGA->PALETTE[1] = 0x000000ff;
+	CGA->PALETTE[2] = 0x0000ff00;
+	CGA->PALETTE[3] = 0x00ff0000;
+
+	printf("PALETTE = %p\r\n", CGA->PALETTE);
+
 	uint32_t *fb = (uint32_t*) CGA->FB;
 	for(int i = 0; i < 2000;  i++)
 		*fb++ = 0x55555555; 

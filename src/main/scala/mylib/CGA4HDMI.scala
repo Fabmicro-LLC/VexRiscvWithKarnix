@@ -35,7 +35,7 @@ case class Apb3CGA4HDMICtrl(
   // Define Control word and connect it to APB3 bus
   val busCtrl = Apb3SlaveFactory(io.apb)
   val cgaCtrlWord = Bits(32 bits)
-  busCtrl.driveAndRead(cgaCtrlWord, address = 48*1024)
+  busCtrl.driveAndRead(cgaCtrlWord, address = 48*1024+16)
 
 
   // Define memory block for CGA framebuffer
@@ -56,6 +56,9 @@ case class Apb3CGA4HDMICtrl(
   }
 
   /*
+
+  // Sync edition of CharGen - uses BRAM
+
   // Define memory block for character generator
   val chargen_mem = Mem(Bits(8 bits), wordCount = 256 ) // font8x16 x 256
   var chargen_access = Bool()
@@ -74,19 +77,31 @@ case class Apb3CGA4HDMICtrl(
   }
   */
 
+  // Async edition of CharGen - uses COMBs and FFs 
+
   val chargen_mem = Mem(Bits(8 bits), wordCount = 16*256 ) // font8x16 x 256
   HexTools.initRam(chargen_mem, charGenHexFile, 0x0l)
 
-  when( io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xf000") === U"xf000")) {
+  when( io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xf000") === U"xf000")) { // 61440
     when(io.apb.PWRITE) {
-      chargen_mem((io.apb.PADDR >> 2).resized) := io.apb.PWDATA(7 downto 0)
+      chargen_mem((io.apb.PADDR & 0x0fff).resized) := io.apb.PWDATA(7 downto 0)
     } otherwise {
-      io.apb.PRDATA := chargen_mem((io.apb.PADDR >> 2).resized).resized
+      io.apb.PRDATA := chargen_mem((io.apb.PADDR & 0x0fff).resized).resized
     }
     io.apb.PREADY := True
   }
   
 
+  val palette_mem = Mem(Bits(32 bits), wordCount = 4) // Pallete for CGA colors 
+
+  when( io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xfff0") === U"xc000")) { // 49152
+    when(io.apb.PWRITE) {
+      palette_mem((io.apb.PADDR >> 2)(1 downto 0)) := io.apb.PWDATA(31 downto 0)
+    } otherwise {
+      io.apb.PRDATA := palette_mem((io.apb.PADDR >> 2)(1 downto 0)).resized
+    }
+    io.apb.PREADY := True
+  }
 
 
   // Split Control word into a number of fields for quick access 
@@ -182,38 +197,19 @@ case class Apb3CGA4HDMICtrl(
 
       val pixel_word = Bits(32 bits)
       val pixel_word_address = UInt(13 bits)
+      val color = UInt(2 bits)
+
       pixel_word := fb_mem.readSync(address = pixel_word_address, enable = DE, clockCrossing = true)
 
       // word_addr = y * 20 + x/16
       pixel_word_address := (CounterY(9 downto 1) * 20 + CounterX(9 downto 5)).resized
 
-      switch((pixel_word >> (CounterX(4 downto 1) << 1))(1 downto 0)) {
-        is(B"00") {
-          red := BufferCC(chargen_mem(CounterY(7 downto 0).resized))
-          green := 0
-          blue := 0
-        }
-        is(B"01") {
-          red := B"11111111" 
-          green := B"11111111" 
-          blue := 0
-        }
-        is(B"10") {
-          red := 0 
-          green := B"11111111" 
-          blue := B"11111111" 
-        }
-        is(B"11") {
-          red := B"11111111" 
-          green := 0 
-          blue := B"11111111" 
-        }
+      color := (pixel_word >> (CounterX(4 downto 1) << 1))(1 downto 0).asUInt
 
-      }
-    } otherwise {
-      red := 0
-      green := 0
-      blue := 0
+      red := BufferCC(palette_mem(color))(7 downto 0)
+      green := BufferCC(palette_mem(color))(15 downto 8)
+      blue := BufferCC(palette_mem(color))(23 downto 16)
+
     }
 
 
