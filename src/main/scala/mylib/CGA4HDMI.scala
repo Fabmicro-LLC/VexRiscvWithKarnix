@@ -92,9 +92,8 @@ case class Apb3CGA4HDMICtrl(
   }
   
 
-  val palette_mem = Mem(Bits(32 bits), wordCount = 4) // Pallete for CGA colors 
-
-  when( io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xfff0") === U"xc000")) { // 49152
+  val palette_mem = Mem(Bits(32 bits), wordCount = 4) // Pallete registers buffered
+  when( io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xfff0") === U"xc000")) { // offset 49152
     when(io.apb.PWRITE) {
       palette_mem((io.apb.PADDR >> 2)(1 downto 0)) := io.apb.PWDATA(31 downto 0)
     } otherwise {
@@ -112,23 +111,23 @@ case class Apb3CGA4HDMICtrl(
   video_enabled := cgaCtrlWord(31)
 
 
-  val hdmiClockDomain = ClockDomain(
+  val cgaClockDomain = ClockDomain(
     clock = io.pixclk,
     config = ClockDomainConfig(resetKind = BOOT),
     frequency = FixedFrequency(25.0 MHz)
   )
 
-  val hdmiCtrl = new ClockingArea(hdmiClockDomain) {
+  val cga = new ClockingArea(cgaClockDomain) {
 
     val TMDS_red = Bits(10 bits)
     val TMDS_green = Bits(10 bits)
     val TMDS_blue = Bits(10 bits)
-    val red = Reg(Bits(8 bits))
-    val green = Reg(Bits(8 bits))
-    val blue = Reg(Bits(8 bits))
-    val hSync = Reg(Bool())
-    val vSync = Reg(Bool())
-    val DE = Reg(Bool())
+    val red = Bits(8 bits)
+    val green = Bits(8 bits)
+    val blue = Bits(8 bits)
+    val hSync = Bool()
+    val vSync = Bool()
+    val DE = Bool()
 
     val encoder_R = TMDS_encoder()
     encoder_R.clk := io.pixclk
@@ -174,44 +173,90 @@ case class Apb3CGA4HDMICtrl(
     TMDS_blue := encoder_B.io.TMDS
     */
 
+    val palette_buf = Mem(Bits(32 bits), wordCount = 4) // Pallete registers buffered
 
     val CounterX = Reg(UInt(10 bits)) init 0
     val CounterY = Reg(UInt(10 bits)) init 0
 
-    DE := (CounterX < U(640)) && (CounterY < U(480))
+    //DE := (CounterX < U(640)) && (CounterY < U(480))
+    //DE := (CounterX >= 32 && CounterX < U(672)) && (CounterY < U(480))
+    DE := (CounterX >= 32 && CounterX < U(672)) && (CounterY < U(480))
+
     CounterX := (CounterX === U(799)) ? U(0) | CounterX + 1
 
     when(CounterX === U(799)) {
       CounterY := (CounterY === U(524)) ? U(0) | CounterY + 1
     }
 
-    hSync := (CounterX >= U(656)) && (CounterX < U(752))
+    hSync := (CounterX >= U(704)) && (CounterX < U(752))
     vSync := (CounterY >= U(490)) && (CounterY < U(492))
 
-    // Test pattern
-    //red := (CounterX < U(120)) ? B"11110000" | B"00000000"
-    //green := (CounterX < U(320)) ? B"00001111" | B"11110000"
-    //blue := (CounterX < U(320)) ? B"11110000" | B"00001111"
+    val pixel_word = Reg(Bits(32 bits))
+    val pixel_word_address = UInt(13 bits)
+    val pixel_word_load = Bool()
+
+    // Load flag active on each 30 and 31 pixel of 32 bit word
+    pixel_word_load := (CounterX >= 0 && CounterX < U(672)) && (CounterY < U(480)) && ((CounterX & U(30)) === U(30))
+
+    // Index of the 32 bit word in framebufffer memory: addr = y * 20 + x/16
+    pixel_word_address := (CounterY(9 downto 1) * 20 + CounterX(9 downto 5)).resized
+
+    // 32 bit word date
+    pixel_word := fb_mem.readSync(address = pixel_word_address, enable = pixel_word_load, clockCrossing = true)
+    
+    // Test pattern -- enable it for debugging
+    if(false) {
+      when(pixel_word_load) {
+        when((pixel_word_address & U(1)) === U(0)) {
+          pixel_word := B"01010101010101010101010101010101"
+        } otherwise {
+          pixel_word := B"10010101010101010101010101011100"
+        }
+      }
+    }
 
     when(DE) {
 
-      val pixel_word = Bits(32 bits)
-      val pixel_word_address = UInt(13 bits)
       val color = UInt(2 bits)
 
-      pixel_word := fb_mem.readSync(address = pixel_word_address, enable = DE, clockCrossing = true)
+      color := (pixel_word << (CounterX(4 downto 1) << 1))(31 downto 30).asUInt
 
-      // word_addr = y * 20 + x/16
-      pixel_word_address := (CounterY(9 downto 1) * 20 + CounterX(9 downto 5)).resized
+      /*
+      switch(color.asBits) {
+        is(B"00") {
+          red := 0 
+          green := 0
+          blue := 0
+        }
+        is(B"01") {
+          red := B"11111111" 
+          green := 0
+          blue := 0
+        }
+        is(B"10") {
+          red := 0 
+          green := B"11111111" 
+          blue := 0
+        }
+        is(B"11") {
+          red := 0 
+          green := 0
+          blue := B"11111111" 
+        }
+      }
+      */
+      red := palette_mem(color).asBits(7 downto 0)
+      green := palette_mem(color).asBits(15 downto 8)
+      blue := palette_mem(color).asBits(23 downto 16)
 
-      color := (pixel_word >> (CounterX(4 downto 1) << 1))(1 downto 0).asUInt
+    } otherwise {
+      red := 0
+      green := 0
+      blue := 0 
 
-      red := BufferCC(palette_mem(color))(7 downto 0)
-      green := BufferCC(palette_mem(color))(15 downto 8)
-      blue := BufferCC(palette_mem(color))(23 downto 16)
-
+      // Copy palette to palette buffer two times
+      palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(BufferCC(CounterX(2 downto 1))))
     }
-
 
     val tmds_clk = OBUFDS()
     tmds_clk.I := io.pixclk
@@ -220,13 +265,13 @@ case class Apb3CGA4HDMICtrl(
   }
 
 
-  val hdmiX10ClockDomain = ClockDomain(
+  val hdmiClockDomain = ClockDomain(
     clock = io.pixclk_x10,
     config = ClockDomainConfig(resetKind = BOOT),
     frequency = FixedFrequency(250.0 MHz)
   )
 
-  val hdmiX10Ctrl = new ClockingArea(hdmiX10ClockDomain) {
+  val hdmi = new ClockingArea(hdmiClockDomain) {
 
     val TMDS_mod10 = Reg(UInt(4 bits)) init(0)
     val TMDS_shift_red = Reg(Bits(10 bits)) init(0)
@@ -234,9 +279,9 @@ case class Apb3CGA4HDMICtrl(
     val TMDS_shift_blue = Reg(Bits(10 bits)) init(0)
     val TMDS_shift_load = Reg(Bool()) init(False)
 
-    TMDS_shift_red := TMDS_shift_load ? BufferCC(hdmiCtrl.TMDS_red) | TMDS_shift_red(9 downto 1).resized
-    TMDS_shift_green := TMDS_shift_load ? BufferCC(hdmiCtrl.TMDS_green) | TMDS_shift_green(9 downto 1).resized
-    TMDS_shift_blue := TMDS_shift_load ? BufferCC(hdmiCtrl.TMDS_blue) | TMDS_shift_blue(9 downto 1).resized
+    TMDS_shift_red := TMDS_shift_load ? BufferCC(cga.TMDS_red) | TMDS_shift_red(9 downto 1).resized
+    TMDS_shift_green := TMDS_shift_load ? BufferCC(cga.TMDS_green) | TMDS_shift_green(9 downto 1).resized
+    TMDS_shift_blue := TMDS_shift_load ? BufferCC(cga.TMDS_blue) | TMDS_shift_blue(9 downto 1).resized
     TMDS_mod10 := ((TMDS_mod10 === U(9)) ? U(0) | TMDS_mod10 + 1)
     TMDS_shift_load := TMDS_mod10 === U(9)
 
@@ -256,6 +301,7 @@ case class Apb3CGA4HDMICtrl(
     io.hdmi.tmds_n(2) := tmds_2.OB
 
   }
+
 }
 
 
