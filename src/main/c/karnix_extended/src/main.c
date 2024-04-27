@@ -194,8 +194,9 @@ int sram_test_write_random_ints(int interations) {
 		printf("Checking SRAM at: %p, size: %d bytes...\r\n", mem, SRAM_SIZE);
 
 		while((unsigned int)mem < SRAM_ADDR_END) {
-			if(*mem != fill) {
-				printf("SRAM check failed at: %p, expected: %p, got: %p\r\n", mem, fill, *mem);
+			unsigned int tmp = *mem;
+			if(tmp != fill) {
+				printf("SRAM check failed at: %p, expected: %p, got: %p\r\n", mem, fill, tmp);
 				fails++;
 			} else {
 				//printf("\r\nMem check OK     at: %p, expected: %p, got: %p\r\n", mem, fill, *mem);
@@ -247,22 +248,24 @@ void cga_fill_screen(char color) {
 }
 
 void cga_test(void) {
-
-	CGA->PALETTE[0] = 0x00000000;
-	CGA->PALETTE[1] = 0x000000ff;
-	CGA->PALETTE[2] = 0x0000ff00;
-	CGA->PALETTE[3] = 0x00ff0000;
-
-	printf("PALETTE = %p\r\n", CGA->PALETTE);
+	static int X = 0, Y = 0;
 
 	uint32_t *fb = (uint32_t*) CGA->FB;
-	for(int i = 0; i < 2000;  i++)
+	for(int i = 0; i < 320*100/16; i++)
 		*fb++ = 0x55555555; 
-	for(int i = 0; i < 2000;  i++)
+	for(int i = 0; i < 320*100/16; i++)
 		*fb++ = 0xaaaaaaaa; 
-	for(int i = 0; i < 800;  i++)
+	for(int i = 0; i < 320*40/16; i++)
 		*fb++ = 0xffffffff; 
 
+	fb = (uint32_t*) CGA->FB;
+	fb[20*20] = 0b00001010101010101010101010101000;
+	fb[21*20] = 0b00100000000000000000000000000010;
+	fb[22*20] = 0b00100011111111111111111111110010;
+	fb[23*20] = 0b00100000000000000000000000000010;
+	fb[24*20] = 0b00001010101010101010101010101000;
+
+	cga_video_print((X++)%320, (Y++)%240, 2 | CGA_OR_BG, "Hello, CGA!", 11, font_12x16, 12, 16);
 }
 
 void main() {
@@ -277,7 +280,8 @@ void main() {
 
 	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during hardware init
 
-	cga_fill_screen(1); // 1 - yellow 
+	cga_set_palette(0x00000000, 0x000000ff, 0x0000ff00, 0x00ff0000);
+	cga_fill_screen(1); // use color #1 (red) 
 
 	init_sbrk(NULL, 0); // Initialize heap for malloc to use on-chip RAM
 
@@ -321,8 +325,8 @@ void main() {
 */
 
 	printf("\r\n"
-		"HUB-12/HUB-75 driver for Karnix ASB-254. Build %05d, date/time: " __DATE__ " " __TIME__ "\r\n"
-		"Copyright (C) 2021-2023 Fabmicro, LLC., Tyumen, Russia.\r\n\r\n",
+		"Karnix ASB-254 test prog. Build %05d, date/time: " __DATE__ " " __TIME__ "\r\n"
+		"Copyright (C) 2021-2024 Fabmicro, LLC., Tyumen, Russia.\r\n\r\n",
 		BUILD_NUMBER
 	);
 
@@ -342,6 +346,8 @@ void main() {
 	} else {
 		printf("SRAM %s!\r\n", "disabled"); 
 	}
+
+	cga_ram_test(10);
 
 	// Disable HUB controller
 	//HUB0->CONTROL = 0;

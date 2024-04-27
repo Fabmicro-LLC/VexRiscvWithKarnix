@@ -52,7 +52,7 @@ case class Apb3CGA4HDMICtrl(
         write  = io.apb.PWRITE,
         mask  = 3 
     )
-    io.apb.PREADY := fb_access
+    io.apb.PREADY := RegNext(fb_access)
   }
 
   /*
@@ -178,9 +178,7 @@ case class Apb3CGA4HDMICtrl(
     val CounterX = Reg(UInt(10 bits)) init 0
     val CounterY = Reg(UInt(10 bits)) init 0
 
-    //DE := (CounterX < U(640)) && (CounterY < U(480))
-    //DE := (CounterX >= 32 && CounterX < U(672)) && (CounterY < U(480))
-    DE := (CounterX >= 32 && CounterX < U(672)) && (CounterY < U(480))
+    DE := (CounterX >= 32 && CounterX < U(672)) && (CounterY >= 16 && CounterY < U(480+16))
 
     CounterX := (CounterX === U(799)) ? U(0) | CounterX + 1
 
@@ -189,17 +187,17 @@ case class Apb3CGA4HDMICtrl(
     }
 
     hSync := (CounterX >= U(704)) && (CounterX < U(752))
-    vSync := (CounterY >= U(490)) && (CounterY < U(492))
+    vSync := (CounterY >= U(490+16)) && (CounterY < U(492+16))
 
     val pixel_word = Reg(Bits(32 bits))
     val pixel_word_address = UInt(13 bits)
     val pixel_word_load = Bool()
 
     // Load flag active on each 30 and 31 pixel of 32 bit word
-    pixel_word_load := (CounterX >= 0 && CounterX < U(672)) && (CounterY < U(480)) && ((CounterX & U(30)) === U(30))
+    pixel_word_load := (CounterX >= 0 && CounterX < U(672)) && (CounterY < U(480+16)) && ((CounterX & U(30)) === U(30))
 
     // Index of the 32 bit word in framebufffer memory: addr = y * 20 + x/16
-    pixel_word_address := (CounterY(9 downto 1) * 20 + CounterX(9 downto 5)).resized
+    pixel_word_address := ((CounterY - 16)(9 downto 1) * 20 + CounterX(9 downto 5)).resized
 
     // 32 bit word date
     pixel_word := fb_mem.readSync(address = pixel_word_address, enable = pixel_word_load, clockCrossing = true)
@@ -221,30 +219,6 @@ case class Apb3CGA4HDMICtrl(
 
       color := (pixel_word << (CounterX(4 downto 1) << 1))(31 downto 30).asUInt
 
-      /*
-      switch(color.asBits) {
-        is(B"00") {
-          red := 0 
-          green := 0
-          blue := 0
-        }
-        is(B"01") {
-          red := B"11111111" 
-          green := 0
-          blue := 0
-        }
-        is(B"10") {
-          red := 0 
-          green := B"11111111" 
-          blue := 0
-        }
-        is(B"11") {
-          red := 0 
-          green := 0
-          blue := B"11111111" 
-        }
-      }
-      */
       red := palette_mem(color).asBits(7 downto 0)
       green := palette_mem(color).asBits(15 downto 8)
       blue := palette_mem(color).asBits(23 downto 16)
@@ -254,8 +228,9 @@ case class Apb3CGA4HDMICtrl(
       green := 0
       blue := 0 
 
-      // Copy palette to palette buffer two times
-      palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(BufferCC(CounterX(2 downto 1))))
+      // Copy palette to palette buffer twice 
+      //palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(BufferCC(CounterX(2 downto 1))))
+      palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(CounterX(2 downto 1)))
     }
 
     val tmds_clk = OBUFDS()
