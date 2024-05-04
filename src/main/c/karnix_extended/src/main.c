@@ -103,7 +103,7 @@ void process_and_wait(uint32_t us) {
 	while(1) {
 		t = get_mtime();
 
-		if(t - t0 >=us)
+		if(t - t0 >= us)
 			break;
 
 		// Process events
@@ -239,6 +239,9 @@ void test_byte_access(void) {
 
 void cga_fill_screen(char color) {
 	uint32_t *fb = (uint32_t*) CGA->FB;
+
+	color = color & 0x3;
+
 	uint32_t filler = (color << 30) | (color << 28) | (color << 26) | (color << 24);
 		 filler |= (filler >> 8) | (filler >> 16) | (filler >> 24);
 
@@ -247,8 +250,21 @@ void cga_fill_screen(char color) {
 
 }
 
+
+void cga_test2(void) {
+
+	while(1) {
+		while(!(CGA->CTRL & CGA_CTRL_VSYNC_FLAG));
+		cga_fill_screen(rand());
+		while(CGA->CTRL & CGA_CTRL_VSYNC_FLAG);
+	}
+}
+
+
 void cga_test(void) {
 	static int X = 0, Y = 0;
+
+	cga_wait_vblank();
 
 	uint32_t *fb = (uint32_t*) CGA->FB;
 	for(int i = 0; i < 320*100/16; i++)
@@ -280,8 +296,6 @@ void main() {
 
 	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during hardware init
 
-	cga_set_palette(0x00000000, 0x000000ff, 0x0000ff00, 0x00ff0000);
-	cga_fill_screen(1); // use color #1 (red) 
 
 	init_sbrk(NULL, 0); // Initialize heap for malloc to use on-chip RAM
 
@@ -349,8 +363,22 @@ void main() {
 
 	cga_ram_test(10);
 
+	cga_set_palette(0x00000000, 0x000000ff, 0x0000ff00, 0x00ff0000);
+
+	printf("Executing CGA video framebuffer performance test...\r\n");
+
+	uint64_t cga_t0 = get_mtime();
+	for(int i = 0; i < 10000; i++) {
+		cga_fill_screen(rand()); // use color #1 (red) 
+	}
+	uint64_t cga_t1 = get_mtime();
+
+	printf("CGA framebuffer perf: %ld uS after 10000 frames\r\n", (uint32_t)(cga_t1 - cga_t0));
+
+	//cga_test2();
+
 	// Disable HUB controller
-	//HUB0->CONTROL = 0;
+	//HUB->CONTROL = 0;
 
 	// Enable writes to EEPROM
 	GPIO->OUTPUT &= ~(1 << EEPROM_WP); 
@@ -484,7 +512,7 @@ void main() {
     		process_and_wait(2000000); 
 	}
 
-	memset((void*)HUB0->FB,  0, hub_frame_size); 
+	memset((void*)HUB->FB,  0, hub_frame_size); 
 
 	short *ring_buffer = (short *)malloc(30000*2);
 
@@ -510,10 +538,9 @@ void main() {
 
 
 		if(1) {
-			printf("HUB12/75 adapter build %05d: mode = HUB%d, hub_fb_size = %d, irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, audiodac0_samples_sent = %d, audiodac0_irqs = %d\r\n",
+			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, audiodac0_samples_sent = %d, audiodac0_irqs = %d\r\n",
 				BUILD_NUMBER,
-				(HUB0->CONTROL & HUB_MASK_TYPE),
-				hub_frame_size, reg_irq_counter, reg_sys_counter, reg_scratch, sbrk_heap_end, audiodac0_samples_sent, audiodac0_irqs);
+				reg_irq_counter, reg_sys_counter, reg_scratch, sbrk_heap_end, audiodac0_samples_sent, audiodac0_irqs);
 
 			plic_print_stats();
 
@@ -525,7 +552,7 @@ void main() {
 
 		}
 	
-		cga_test();
+		//cga_test();
 		//sram_test_write_shorts();
 		//sram_test_write_random_ints();
 

@@ -32,10 +32,21 @@ case class Apb3CGA4HDMICtrl(
     val pixclk_x10 = in Bool() 
   }
 
-  // Define Control word and connect it to APB3 bus
   val busCtrl = Apb3SlaveFactory(io.apb)
-  val cgaCtrlWord = Bits(32 bits)
-  busCtrl.driveAndRead(cgaCtrlWord, address = 48*1024+16)
+
+  // Define Control word and connect it to APB3 bus
+  /*
+   * cgaCtrlWord: 31    - video enable
+   *              27-24 - video mode
+   *              23    - HSYNC INT enable
+   *              22    - VSYNC INT enable
+   *              21    - HSYNC status
+   *              20    - VSYNC status
+   */
+
+  val cgaCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 48*1024+16) init(0)
+  val video_enabled = cgaCtrlWord(31) 
+  val video_mode = cgaCtrlWord(27 downto 24) 
 
 
   // Define memory block for CGA framebuffer
@@ -101,14 +112,6 @@ case class Apb3CGA4HDMICtrl(
     }
     io.apb.PREADY := True
   }
-
-
-  // Split Control word into a number of fields for quick access 
-  val video_enabled = Bool()
-  val video_mode = UInt (4 bits)
-
-  video_mode := cgaCtrlWord(27 downto 24).asUInt
-  video_enabled := cgaCtrlWord(31)
 
 
   val cgaClockDomain = ClockDomain(
@@ -231,14 +234,17 @@ case class Apb3CGA4HDMICtrl(
       // Copy palette to palette buffer twice 
       //palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(BufferCC(CounterX(2 downto 1))))
       palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(CounterX(2 downto 1)))
+
     }
 
     val tmds_clk = OBUFDS()
     tmds_clk.I := io.pixclk
     io.hdmi.tmds_clk_p := tmds_clk.O
     io.hdmi.tmds_clk_n := tmds_clk.OB
+
   }
 
+  cgaCtrlWord(21 downto 20) := BufferCC(cga.hSync ## cga.vSync)
 
   val hdmiClockDomain = ClockDomain(
     clock = io.pixclk_x10,

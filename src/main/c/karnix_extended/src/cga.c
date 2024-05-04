@@ -11,7 +11,7 @@ void cga_set_palette(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3) {
 
 void cga_video_print(int x, int y, int colors, char *text, int text_size, const char *font, int font_width, int font_height) {
 
-	for(int i = 0; i < text_size; i++)
+	for(int i = 0; i < text_size && text[i]; i++)
 		cga_video_print_char(CGA->FB, text[i], x + i * font_width, y, colors, CGA_VIDEO_WIDTH, CGA_VIDEO_HEIGHT, font, font_width, font_height);
 
 }
@@ -127,3 +127,6 @@ int cga_ram_test(int interations) {
 	return fails++;
 }
 
+void cga_wait_vblank(void) {
+	while(CGA->CTRL & CGA_CTRL_VSYNC_FLAG);
+}

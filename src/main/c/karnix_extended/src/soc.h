@@ -21,7 +21,7 @@
 #define UART0		((Uart_Reg*)(0xF0010000))
 #define UART1		((Uart_Reg*)(0xF0011000))
 #define PWM		((Pwm_Reg*)0xF0030000)
-#define HUB0		((Hub_Reg*)(0xF0050000))
+#define HUB		((Hub_Reg*)(0xF0050000))
 #define PLIC		((PLIC_Reg*)(0xF0060000))
 #define GPIO		((Gpio_Reg*)(0xF0000000))
 #define MAC		((MAC_Reg*)(0xF0070000))
@@ -34,10 +34,10 @@
 inline volatile unsigned long long get_mtime(void) { return MTIME; }
 
 //#define	SYSTEM_CLOCK_HZ	58333000
-//#define	SYSTEM_CLOCK_HZ	50000000
+#define	SYSTEM_CLOCK_HZ	50000000
 //#define	SYSTEM_CLOCK_HZ	65000000
 //#define	SYSTEM_CLOCK_HZ	62000000
-#define	SYSTEM_CLOCK_HZ	60000000
+//#define	SYSTEM_CLOCK_HZ	60000000
 
 
 #endif /* __SOC_H__ */

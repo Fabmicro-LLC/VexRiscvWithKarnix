@@ -39,12 +39,16 @@
 #define	REG_PRINT_TEXT			50		// Print text on the LED screen (X: 16 bits, Y: 16 bits, FontID: 16 bits, remaining is TEXT)
 #define	REG_CLEAR_TEXT			51		// Clear screen
 #define	REG_COLOR			52		// Current text color 
+#define	REG_VIDEO_MODE			53		// Choose between CGA (1) and HUB (2) 
 
 #define	REG_AUDIODAC0_BUFFER		60		// Command to write to AUDIODAC0 tx buffer 
 
 
 #define	REG_CONFIG_WRITE		126		// Config write Operations: (32 bit signed) - any positive value greater than 0 allows config to be written 
 #define	REG_REBOOT			127		// Writing to this register causes hard reboot
+
+#define REG_VIDEO_MODE_CGA  		1
+#define REG_VIDEO_MODE_HUB		2
 
 extern volatile uint32_t reg_sys_counter;
 extern volatile uint32_t reg_irq_counter;

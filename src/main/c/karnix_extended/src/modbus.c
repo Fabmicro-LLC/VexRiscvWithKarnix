@@ -5,12 +5,15 @@
 #include "crc16.h"
 //#include "aes.h"
 #include "hub.h"
+#include "cga.h"
 #include "audiodac.h"
 #include "modbus.h"
 
 //#define MODBUS_DEBUG	1
 
-uint32_t reg_hub_color = HUB_COLOR_WHITE;
+uint32_t reg_color = HUB_COLOR_WHITE;
+uint32_t reg_video_mode = REG_VIDEO_MODE_CGA;
+uint32_t reg_video_frame_size = CGA_FRAMEBUFFER_SIZE;
 
 uint32_t modbus_error(uint8_t f, uint8_t err_code, uint8_t *txbuf)
 {
@@ -35,7 +38,9 @@ int modbus_store_reg(uint16_t reg, uint8_t *data, uint16_t data_len) {
 	switch(reg) {
 
 		case REG_CLEAR_TEXT: {
-			memset((void*)HUB0->FB,  0, hub_frame_size);
+			void *p = (void*)(reg_video_mode == REG_VIDEO_MODE_HUB ?
+				HUB->FB : CGA->FB);
+			memset(p,  0, reg_video_frame_size);
 			ret = 0;
 		} break;
 
@@ -70,11 +75,15 @@ int modbus_store_reg(uint16_t reg, uint8_t *data, uint16_t data_len) {
 
 		case REG_FRAMEBUFFER: {
 			int offset = data[0] << 8 | data[1];
-			int words_to_copy = MIN(HUB_FRAMEBUFFER_SIZE, data_len - 2) / 4;
+			int words_to_copy = reg_video_mode == REG_VIDEO_MODE_HUB ? 
+						MIN(HUB_FRAMEBUFFER_SIZE, data_len - 2) / 4
+						:
+						MIN(CGA_FRAMEBUFFER_SIZE, data_len - 2) / 4;
+			uint8_t* p = (uint8_t*) (reg_video_mode == REG_VIDEO_MODE_HUB ? HUB->FB : CGA->FB);
 
-			// We can write only 32 bit words at a time to HUB frame buffer
+			// We can write only 32 bit words at a time to frame buffer
 			for(int i = 0; i < words_to_copy; i++)
-				*(unsigned int*)(HUB0->FB + offset + i*4) = 
+				*(unsigned int*)(p + offset + i*4) = 
 					data[2 + i * 4 + 3] << 24 |
 					data[2 + i * 4 + 2] << 16 |
 					data[2 + i * 4 + 1] << 8  |
@@ -99,9 +108,15 @@ int modbus_store_reg(uint16_t reg, uint8_t *data, uint16_t data_len) {
 			}
 
 			if(font_id == 0)
-				hub_print(x, y, reg_hub_color, &(data[6]), text_len, font_6x8, 6, 8);
+				if(reg_video_mode == REG_VIDEO_MODE_HUB)
+					hub_print(x, y, reg_color, &(data[6]), text_len, font_6x8, 6, 8);
+				else
+					cga_video_print(x, y, reg_color, &(data[6]), text_len, font_6x8, 6, 8);
 			else
-				hub_print(x, y, reg_hub_color, &(data[6]), text_len, font_12x16, 12, 16);
+				if(reg_video_mode == REG_VIDEO_MODE_HUB)
+					hub_print(x, y, reg_color, &(data[6]), text_len, font_12x16, 12, 16);
+				else
+					cga_video_print(x, y, reg_color, &(data[6]), text_len, font_12x16, 12, 16);
 
 			ret = 0;
 		} break;
@@ -117,7 +132,17 @@ int modbus_store_reg(uint16_t reg, uint8_t *data, uint16_t data_len) {
 		} break;
 
 		case REG_COLOR: {
-			reg_hub_color = data[3]; // only 8 bits are valid
+			reg_color = data[3]; // only 8 bits are valid
+			ret = 0;
+		} break;
+
+		case REG_VIDEO_MODE: {
+			reg_video_mode = data[3]; // only 8 bits are valid
+			if(reg_video_mode == REG_VIDEO_MODE_HUB)
+				reg_video_frame_size = HUB_FRAMEBUFFER_SIZE;
+			else
+				reg_video_frame_size = CGA_FRAMEBUFFER_SIZE;
+
 			ret = 0;
 		} break;
 
@@ -336,7 +361,13 @@ int modbus_recv(uint8_t *rx_buf, int rx_len, uint8_t *tx_buf) {
 						} break;
 
 						case REG_COLOR: {
-							uint8_t* p = (uint8_t*)&reg_hub_color;
+							uint8_t* p = (uint8_t*)&reg_color;
+							memcpy_rev(&(tx_buf[3]), &(p[3]), 4);
+							tx_len += 4;
+						} break;
+
+						case REG_VIDEO_MODE: {
+							uint8_t* p = (uint8_t*)&reg_video_mode;
 							memcpy_rev(&(tx_buf[3]), &(p[3]), 4);
 							tx_len += 4;
 						} break;

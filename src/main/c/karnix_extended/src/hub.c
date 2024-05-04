@@ -57,20 +57,20 @@ int hub_init(uint32_t hub_type) {
 	hub_frame_height = hub_configs[hub_idx].MATRIX_PLANES * hub_configs[hub_idx].MATRIX_ROWS_PER_PLANE;
 
 	// Disable HUB controller
-	HUB0->CONTROL = 0;
+	HUB->CONTROL = 0;
 
 	// Fill-in plane offsets in bytes which is an offset from base address
 	for(int i = 0; i < hub_configs[hub_idx].MATRIX_PLANES; i++) {
-		HUB0->PLANE_OFFSETS[i] = (i * hub_configs[hub_idx].MATRIX_WIDTH * 
+		HUB->PLANE_OFFSETS[i] = (i * hub_configs[hub_idx].MATRIX_WIDTH * 
 						hub_configs[hub_idx].MATRIX_BITS_PER_PIXEL * 
 						hub_configs[hub_idx].MATRIX_ROWS_PER_PLANE) / 8;
 	}
 
 	// Clear framebuffer
-	//memset((void*)HUB0->FB, 0, hub_frame_size);
+	//memset((void*)HUB->FB, 0, hub_frame_size);
 
 	// Configure and enable HUB controller 
-	HUB0->CONTROL   = ((255) << HUB_BITS_BRIGHTNESS)
+	HUB->CONTROL   = ((255) << HUB_BITS_BRIGHTNESS)
 			| ((hub_configs[hub_idx].MATRIX_WIDTH) << HUB_BITS_WIDTH)
 			| ((hub_configs[hub_idx].MATRIX_PLANES) << HUB_BITS_PLANES)
 			| ((hub_configs[hub_idx].MATRIX_TYPE) << HUB_BITS_TYPE)
@@ -91,7 +91,7 @@ void hub_print(int x, int y, int color, char *text, int text_size, const char *f
 
 	for(int i = 0; i < text_size; i++) {
 
-		hub_print_char(HUB0->FB, text[i], x + i * font_width, y, color, hub_frame_width, hub_frame_height, HUB0->CONTROL & HUB_MASK_TYPE, font, font_width, font_height); 
+		hub_print_char(HUB->FB, text[i], x + i * font_width, y, color, hub_frame_width, hub_frame_height, HUB->CONTROL & HUB_MASK_TYPE, font, font_width, font_height); 
 	} 
 }
 
