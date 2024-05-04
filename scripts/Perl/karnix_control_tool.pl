@@ -1318,7 +1318,6 @@ if(length($text) > 0) {
 	#	$resp = $client->receive_response;
 	#};
 
-print "XXXX: '$text' = ".length($text)."\n";
 	@data = buffer_to_array($text, 3, $text_flag);
 	@data[0] = $X; ## X
 	@data[1] = $Y; ## Y
