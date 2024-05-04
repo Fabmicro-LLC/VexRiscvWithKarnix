@@ -131,7 +131,7 @@ $reg_reboot = 127;
 $ARGC = @ARGV;
 
 if($ARGC > 0) {
-	$text = $ARGV[0]." \0";
+	$text = $ARGV[0];
 }
 
 if(length($port_type) == 0) { $port_type = 'udp'; }
@@ -166,17 +166,23 @@ sub buffer_to_array {
 			last;
 		}
 
+		if($h == 0) {
+			last;
+		}
+
+
 		($l, $buf) = unpack("C a*", $buf);
 		if(length($l) < 1) {
 			$l = 0;
 		}
 
+		print STDERR "buffer_to_array() packed h = $h, l = $l \n";
 		push @data, ($h<<8)+$l;
 
 		$counter++;
 	}
 
-	###print STDERR "buffer_to_array() packed $counter items\n";
+	print STDERR "buffer_to_array() packed $counter items\n";
 
 	return @data;
 }
@@ -1312,6 +1318,7 @@ if(length($text) > 0) {
 	#	$resp = $client->receive_response;
 	#};
 
+print "XXXX: '$text' = ".length($text)."\n";
 	@data = buffer_to_array($text, 3, $text_flag);
 	@data[0] = $X; ## X
 	@data[1] = $Y; ## Y
