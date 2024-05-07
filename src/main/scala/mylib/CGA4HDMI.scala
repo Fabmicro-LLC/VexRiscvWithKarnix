@@ -12,6 +12,14 @@ case class OBUFDS() extends BlackBox{
   val O, OB = out Bool()
 }
 
+
+case class DCCA() extends BlackBox{
+  val CLKI = in  Bool()
+  val CLKO = out  Bool()
+  val CE = in  Bool()
+}
+
+
 case class Apb3CGA4HDMICtrl(
       screen_width: Int = 640,
       screen_height: Int = 480,
@@ -26,10 +34,10 @@ case class Apb3CGA4HDMICtrl(
       charGenHexFile: String = "font8x16x256.hex"
       ) extends Component {
   val io = new Bundle {
-    val apb = slave(Apb3(addressWidth = 16, dataWidth = 32))
-    val hdmi = master(HDMIInterface())
-    val pixclk = in Bool()
-    val pixclk_x10 = in Bool() 
+    val apb              = slave(Apb3(addressWidth = 16, dataWidth = 32))
+    val hdmi             = master(HDMIInterface())
+    val pixclk_x10       = in Bool() 
+    val vblank_interrupt = out Bool()
   }
 
   val busCtrl = Apb3SlaveFactory(io.apb)
@@ -42,9 +50,10 @@ case class Apb3CGA4HDMICtrl(
    *              22    - VSYNC INT enable
    *              21    - HSYNC status
    *              20    - VSYNC status
+   *              19    - VBLANK status
    */
 
-  val cgaCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 48*1024+16) init(0)
+  val cgaCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 48*1024+16) init(B"10000000000000000000000000000000")
   val video_enabled = cgaCtrlWord(31) 
   val video_mode = cgaCtrlWord(27 downto 24) 
 
@@ -113,9 +122,16 @@ case class Apb3CGA4HDMICtrl(
     io.apb.PREADY := True
   }
 
+  val pixclk25_in = Bool()
+  val pixclk25 = Bool()
+
+  val dcca = new DCCA()
+  dcca.CLKI := pixclk25_in
+  dcca.CE := True
+  pixclk25 := dcca.CLKO
 
   val cgaClockDomain = ClockDomain(
-    clock = io.pixclk,
+    clock = pixclk25,
     config = ClockDomainConfig(resetKind = BOOT),
     frequency = FixedFrequency(25.0 MHz)
   )
@@ -130,58 +146,36 @@ case class Apb3CGA4HDMICtrl(
     val blue = Bits(8 bits)
     val hSync = Bool()
     val vSync = Bool()
+    val vBlank =Bool()
     val DE = Bool()
 
     val encoder_R = TMDS_encoder()
-    encoder_R.clk := io.pixclk
+    encoder_R.clk := pixclk25
     encoder_R.VD := red
     encoder_R.CD := B"00"
     encoder_R.VDE := DE
     TMDS_red := encoder_R.TMDS
 
     val encoder_G = TMDS_encoder()
-    encoder_G.clk := io.pixclk
+    encoder_G.clk := pixclk25
     encoder_G.VD := green 
     encoder_G.CD := B"00"
     encoder_G.VDE := DE
     TMDS_green := encoder_G.TMDS
 
     val encoder_B = TMDS_encoder()
-    encoder_B.clk := io.pixclk
+    encoder_B.clk := pixclk25
     encoder_B.VD := blue 
     encoder_B.CD := vSync ## hSync 
     encoder_B.VDE := DE
     TMDS_blue := encoder_B.TMDS
-
-    /*
-    val encoder_R = new TMDSEncoder()
-    encoder_R.io.clk := io.pixclk
-    encoder_R.io.VD := red
-    encoder_R.io.CD := B"00"
-    encoder_R.io.VDE := DE
-    TMDS_red := encoder_R.io.TMDS
-
-    val encoder_G = new TMDSEncoder()
-    encoder_G.io.clk := io.pixclk
-    encoder_G.io.VD := green 
-    encoder_G.io.CD := B"00"
-    encoder_G.io.VDE := DE
-    TMDS_green := encoder_G.io.TMDS
-
-    val encoder_B = new TMDSEncoder()
-    encoder_B.io.clk := io.pixclk
-    encoder_B.io.VD := blue 
-    encoder_B.io.CD := vSync ## hSync 
-    encoder_B.io.VDE := DE
-    TMDS_blue := encoder_B.io.TMDS
-    */
 
     val palette_buf = Mem(Bits(32 bits), wordCount = 4) // Pallete registers buffered
 
     val CounterX = Reg(UInt(10 bits)) init 0
     val CounterY = Reg(UInt(10 bits)) init 0
 
-    DE := (CounterX >= 32 && CounterX < U(672)) && (CounterY >= 16 && CounterY < U(480+16))
+    DE := (CounterX >= U(32) && CounterX < U(672)) && (CounterY >= U(16) && CounterY < U(480+16))
 
     CounterX := (CounterX === U(799)) ? U(0) | CounterX + 1
 
@@ -191,6 +185,7 @@ case class Apb3CGA4HDMICtrl(
 
     hSync := (CounterX >= U(704)) && (CounterX < U(752))
     vSync := (CounterY >= U(490+16)) && (CounterY < U(492+16))
+    vBlank := (CounterY < U(16)) || (CounterY >= U(480+16))
 
     val pixel_word = Reg(Bits(32 bits))
     val pixel_word_address = UInt(13 bits)
@@ -216,7 +211,7 @@ case class Apb3CGA4HDMICtrl(
       }
     }
 
-    when(DE) {
+    when(DE && BufferCC(video_enabled)) {
 
       val color = UInt(2 bits)
 
@@ -238,13 +233,14 @@ case class Apb3CGA4HDMICtrl(
     }
 
     val tmds_clk = OBUFDS()
-    tmds_clk.I := io.pixclk
+    tmds_clk.I := pixclk25
     io.hdmi.tmds_clk_p := tmds_clk.O
     io.hdmi.tmds_clk_n := tmds_clk.OB
 
   }
 
-  cgaCtrlWord(21 downto 20) := BufferCC(cga.hSync ## cga.vSync)
+  cgaCtrlWord(21 downto 19) := BufferCC(cga.hSync ## cga.vSync ## cga.vBlank)
+  io.vblank_interrupt := cgaCtrlWord(19) 
 
   val hdmiClockDomain = ClockDomain(
     clock = io.pixclk_x10,
@@ -259,6 +255,23 @@ case class Apb3CGA4HDMICtrl(
     val TMDS_shift_green = Reg(Bits(10 bits)) init(0)
     val TMDS_shift_blue = Reg(Bits(10 bits)) init(0)
     val TMDS_shift_load = Reg(Bool()) init(False)
+
+
+    // Generate 25 MHz PIXCLK (div by 10)
+    val clk25_div = Reg(UInt(4 bits)) init(0)
+    val clk25 = Reg(Bool())
+
+    clk25_div := clk25_div + 1
+
+    when(clk25_div === 4) {
+      clk25 := True
+    }
+
+    when(clk25_div === 9) {
+      clk25 := False
+      clk25_div := 0
+    }
+
 
     TMDS_shift_red := TMDS_shift_load ? BufferCC(cga.TMDS_red) | TMDS_shift_red(9 downto 1).resized
     TMDS_shift_green := TMDS_shift_load ? BufferCC(cga.TMDS_green) | TMDS_shift_green(9 downto 1).resized
@@ -283,6 +296,7 @@ case class Apb3CGA4HDMICtrl(
 
   }
 
+  pixclk25_in := hdmi.clk25
 }
 
 

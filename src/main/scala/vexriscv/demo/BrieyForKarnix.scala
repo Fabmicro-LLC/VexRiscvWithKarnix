@@ -264,7 +264,6 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     val hard_reset = out Bool()
     val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
     val hdmi = master(HDMIInterface())
-    val pixclk = in Bool()
     val pixclk_x10 = in Bool()
   }
 
@@ -383,10 +382,11 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
 
     //val hubCtrl = new Apb3HubCtrl()
     //io.hub := hubCtrl.io.output
+    
     val cgaCtrl = new Apb3CGA4HDMICtrl()
     io.hdmi := cgaCtrl.io.hdmi
-    cgaCtrl.io.pixclk := io.pixclk
     cgaCtrl.io.pixclk_x10 := io.pixclk_x10
+    plic.setIRQ(cgaCtrl.io.vblank_interrupt, 7)
 
 
     val machineTimer = Apb3MachineTimer(axiFrequency.toInt / 1000000)
@@ -489,7 +489,6 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
 
 }
 
-
 case class BrieyForKarnixTopLevel() extends Component{
     val io = new Bundle {
 	val clk25 = in Bool()
@@ -542,7 +541,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 50.0 MHz, 
+		axiFrequency = 60.0 MHz, 
 		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
@@ -580,11 +579,12 @@ case class BrieyForKarnixTopLevel() extends Component{
 
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 16, opDiv = 7, opCPhase = 3) ) // 80.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 3, opDiv = 8, opCPhase = 4) ) // 75.0 MHz
-    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
+    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 13, opDiv = 9, opCPhase = 4) ) // 65.0 MHz
-    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 12, opDiv = 10, opCPhase = 4) ) // 60.0 MHz
+    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 12, opDiv = 10, opCPhase = 4) ) // 60.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 6, fbDiv = 15, opDiv = 10, opCPhase = 4) ) // 62.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 3, fbDiv = 7, opDiv = 11, opCPhase = 5) ) // 58.0 MHz
+
 
     core_pll.io.CLKI := io.clk25
     core_pll.io.CLKFB := core_pll.io.CLKOP
@@ -626,10 +626,10 @@ case class BrieyForKarnixTopLevel() extends Component{
 	val CE = in  Bool()
     }
 
-    var dcca_core_pll = DCCA()
-    dcca_core_pll.CE := True
-    dcca_core_pll.CLKI := core_pll.io.CLKOP
-    briey.io.mainClk := dcca_core_pll.CLKO
+    var dcca_hdmi = DCCA()
+    dcca_hdmi.CE := True
+    dcca_hdmi.CLKI := hdmi_pll.io.CLKOP
+    briey.io.pixclk_x10 := dcca_hdmi.CLKO
     */
 
     /*
@@ -657,7 +657,6 @@ case class BrieyForKarnixTopLevel() extends Component{
     //io.gpio <> briey.io.hub
     //io.gpio <> briey.io.gpioB
     io.hdmi <> briey.io.hdmi
-    briey.io.pixclk := io.clk25
 
     briey.io.uart0.txd <> io.uart_debug_txd
     briey.io.uart0.rxd <> io.uart_debug_rxd
