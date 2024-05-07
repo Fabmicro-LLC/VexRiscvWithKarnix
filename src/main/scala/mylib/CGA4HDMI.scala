@@ -175,7 +175,9 @@ case class Apb3CGA4HDMICtrl(
     val CounterX = Reg(UInt(10 bits)) init 0
     val CounterY = Reg(UInt(10 bits)) init 0
 
-    DE := (CounterX >= U(32) && CounterX < U(672)) && (CounterY >= U(16) && CounterY < U(480+16))
+    DE := (CounterX >= U(32) && CounterX < U(672)) &&
+          (CounterY >= U(16) && CounterY < U(480+16)) &&
+          BufferCC(video_enabled)
 
     CounterX := (CounterX === U(799)) ? U(0) | CounterX + 1
 
@@ -211,7 +213,7 @@ case class Apb3CGA4HDMICtrl(
       }
     }
 
-    when(DE && BufferCC(video_enabled)) {
+    when(DE) {
 
       val color = UInt(2 bits)
 
@@ -227,7 +229,6 @@ case class Apb3CGA4HDMICtrl(
       blue := 0 
 
       // Copy palette to palette buffer twice 
-      //palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(BufferCC(CounterX(2 downto 1))))
       palette_buf(CounterX(2 downto 1)) := BufferCC(palette_mem(CounterX(2 downto 1)))
 
     }
@@ -271,7 +272,6 @@ case class Apb3CGA4HDMICtrl(
       clk25 := False
       clk25_div := 0
     }
-
 
     TMDS_shift_red := TMDS_shift_load ? BufferCC(cga.TMDS_red) | TMDS_shift_red(9 downto 1).resized
     TMDS_shift_green := TMDS_shift_load ? BufferCC(cga.TMDS_green) | TMDS_shift_green(9 downto 1).resized
