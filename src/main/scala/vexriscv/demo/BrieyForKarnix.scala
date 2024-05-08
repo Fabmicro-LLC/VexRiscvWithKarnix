@@ -494,7 +494,7 @@ case class BrieyForKarnixTopLevel() extends Component{
 	val clk25 = in Bool()
 	val uart_debug_txd = out Bool() // mapped to uart_debug_txd
 	val uart_debug_rxd = in Bool() // mapped to uart_debug_rxd
-	val led = out Bits(3 bits)
+	val led = out Bits(4 bits)
 	val key = in Bits(4 bits)
 	//val gpio = out Bits(16 bits)
         val gpio = inout(Analog(Bits(16 bits)))
@@ -649,7 +649,7 @@ case class BrieyForKarnixTopLevel() extends Component{
 
     io.led := briey.io.gpioA.write.resized
 
-    io.eeprom_wp := briey.io.gpioA.write(3) 
+    io.eeprom_wp := briey.io.gpioA.write(30) 
     briey.io.gpioA.read(3 downto 0) := io.key 
     briey.io.gpioA.read(30 downto 4) := 0
     briey.io.gpioA.read(31) := io.config 
