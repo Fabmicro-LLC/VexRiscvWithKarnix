@@ -55,6 +55,7 @@ case class Apb3CGA4HDMICtrl(
 
   val cgaCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 48*1024+16) init(B"10000000000000000000000000000000")
   val video_enabled = cgaCtrlWord(31) 
+  val blanking_enabled = cgaCtrlWord(30) 
   val video_mode = cgaCtrlWord(27 downto 24) 
 
 
@@ -213,7 +214,7 @@ case class Apb3CGA4HDMICtrl(
       }
     }
 
-    when(DE) {
+    when(DE && !BufferCC(blanking_enabled)) {
 
       val color = UInt(2 bits)
 
