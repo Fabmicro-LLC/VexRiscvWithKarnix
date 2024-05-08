@@ -15,6 +15,8 @@ SRCS = 	$(wildcard src/*.c) $(wildcard src/*.cpp) $(wildcard src/*.S) $(COREFILE
 #SRCS = 	src/main.c src/utils.c $(wildcard src/*.cpp) $(wildcard src/*.S)
 #SRCS = 	src/main.c src/utils.c $(wildcard src/*.cpp) $(wildcard src/*.S) src/lwip/core/mem.c 
 
+
+
 OBJDIR = build
 
 INC  = -I$(LWIPDIR) -I$(LWIPDIR)/include
@@ -53,7 +55,7 @@ ifeq ($(COMPRESSED),yes)
 	MARCH := $(MARCH)c
 endif
 
-CFLAGS += -Os -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
+CFLAGS += -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
 LDFLAGS += -march=$(MARCH)  -mabi=$(MABI) -specs=nano.specs -lnosys -lc_nano
 #LDFLAGS += -march=rv32im -mabi=ilp32 -specs=nano.specs -lnosys -lc_nano
 
@@ -123,6 +125,8 @@ $(OBJDIR)/%.elf: $(OBJS) | $(OBJDIR)
 
 %.asm: %.elf
 	$(RISCV_OBJDUMP) -S -d $^ > $@
+
+$(OBJDIR)/src/cga.o: CFLAGS += -O1 
 
 $(OBJDIR)/%.o: %.c
 	mkdir -p $(dir $@)

@@ -94,13 +94,13 @@ void modbus_udp_send(const ip_addr_t *addr, u16_t port, uint8_t* buf, uint32_t b
 	err_t err;
 
 	if((p = pbuf_alloc(PBUF_TRANSPORT, (u16_t)(buf_len + 1), PBUF_RAM)) == NULL) {
-		GPIO->OUTPUT &= ~(1 << LED_R); // Error indicator
+		GPIO->OUTPUT &= ~GPIO_OUT_LED2; // Error indicator
 		printf("modbus_udp_send() error while in pbuf_alloc()\r\n");
 		return;
 	}
 
 	if(p->payload == NULL || p->len < buf_len + 1) {
-		GPIO->OUTPUT &= ~(1 << LED_R); // Error indicator
+		GPIO->OUTPUT &= ~GPIO_OUT_LED2; // Error indicator
 		printf("modbus_udp_send() bogus p->payload = %p, p->len = %d\r\n", p->payload, p->len);
 		return;
 	}
@@ -112,7 +112,7 @@ void modbus_udp_send(const ip_addr_t *addr, u16_t port, uint8_t* buf, uint32_t b
 	payload[buf_len] = 0;
 
 	if((err = udp_sendto(modbus_udp_pcb, p, addr, port)) != ERR_OK) {
-		GPIO->OUTPUT &= ~(1 << LED_R); // Error indicator
+		GPIO->OUTPUT &= ~GPIO_OUT_LED2; // Error indicator
 		printf("modbus_udp_send() error while in udp_sendto() = %d\r\n", err);
 	} else {
 		#ifdef MODBUS_DEBUG

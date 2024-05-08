@@ -15,13 +15,14 @@ typedef struct
 } PLIC_Reg;
 
 
-#define	PLIC_IRQ_UART0		0x00000001
-#define	PLIC_IRQ_UART1		0x00000002
-#define	PLIC_IRQ_MAC		0x00000004
-#define	PLIC_IRQ_TIMER0		0x00000008
-#define	PLIC_IRQ_TIMER1		0x00000010
-#define	PLIC_IRQ_I2C		0x00000020
-#define	PLIC_IRQ_AUDIODAC0	0x00000040
+#define	PLIC_IRQ_UART0		(1 << 0)
+#define	PLIC_IRQ_UART1		(1 << 1)
+#define	PLIC_IRQ_MAC		(1 << 2)
+#define	PLIC_IRQ_TIMER0		(1 << 3)
+#define	PLIC_IRQ_TIMER1		(1 << 4)
+#define	PLIC_IRQ_I2C		(1 << 5)
+#define	PLIC_IRQ_AUDIODAC0	(1 << 6)	
+#define	PLIC_IRQ_CGA_VBLANK	(1 << 7)
 
 void plic_print_stats(void);
 

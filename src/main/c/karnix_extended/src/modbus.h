@@ -53,7 +53,7 @@
 extern volatile uint32_t reg_sys_counter;
 extern volatile uint32_t reg_irq_counter;
 extern volatile uint32_t reg_scratch;
-extern volatile  int32_t reg_config_write;
+extern volatile uint32_t reg_config_write;
 
 uint32_t modbus_error(uint8_t f, uint8_t err_code, uint8_t *txbuf);
 int modbus_recv(uint8_t *rx_buf, int rx_len, uint8_t *tx_buf);

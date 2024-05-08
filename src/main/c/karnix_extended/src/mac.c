@@ -220,7 +220,7 @@ void mac_rx(void) {
 		p = pbuf_alloc(PBUF_RAW, buffer_len, PBUF_POOL);
   
 		if(p == NULL) {
-			GPIO->OUTPUT |= (1 << LED_R); // Error indicator
+			GPIO->OUTPUT |= GPIO_OUT_LED2; // Error indicator
 
 			printf("mac_rx() pbuf_alloc(%d) error, bytes_left = %d, bits = %d, words = %d !!!\r\n", buffer_len, bytes_left, bits, words);
 			LINK_STATS_INC(link.memerr);
@@ -257,7 +257,7 @@ void mac_rx(void) {
 					q = q->next;
 
 					if(q == NULL) {
-						GPIO->OUTPUT |= (1 << LED_R); // Error indicator
+						GPIO->OUTPUT |= GPIO_OUT_LED2; // Error indicator
 
 						print("mac_rx() not enough space in pbuf!\r\n");
 
@@ -328,7 +328,7 @@ void mac_rx(void) {
 		int rc;
 
 		if((rc = default_netif.input(p, &default_netif)) != ERR_OK) {
-			GPIO->OUTPUT |= (1 << LED_R); // Error indicator
+			GPIO->OUTPUT |= GPIO_OUT_LED2; // Error indicator
 			printf("mac_rx() default_netif.input() error %d\r\n", rc);
 		}
 
@@ -348,7 +348,7 @@ err_t mac_tx_packet(struct netif *netif, struct pbuf *p) {
 	//printf("mac_tx_packet() begin\r\n");
   
 	if(netif == NULL || p == NULL) {
-		GPIO->OUTPUT |= (1 << LED_R); // Error indicator
+		GPIO->OUTPUT |= GPIO_OUT_LED2; // Error indicator
 		//printf("mac_tx_packet() wrong args, netif = %p, p = %p\r\n", netif, p);
 		return ERR_ARG;
 	}

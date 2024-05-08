@@ -11,9 +11,14 @@
 
 //#define MODBUS_DEBUG	1
 
-uint32_t reg_color = HUB_COLOR_WHITE;
-uint32_t reg_video_mode = REG_VIDEO_MODE_CGA;
-uint32_t reg_video_frame_size = CGA_FRAMEBUFFER_SIZE;
+volatile uint32_t reg_color = HUB_COLOR_WHITE;
+volatile uint32_t reg_video_mode = REG_VIDEO_MODE_CGA;
+volatile uint32_t reg_video_frame_size = CGA_FRAMEBUFFER_SIZE;
+volatile uint32_t reg_irq_counter = 0;
+volatile uint32_t reg_sys_counter = 0;
+volatile uint32_t reg_scratch = 0;
+volatile uint32_t reg_config_write = 0;
+
 
 uint32_t modbus_error(uint8_t f, uint8_t err_code, uint8_t *txbuf)
 {

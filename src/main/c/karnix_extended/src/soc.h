@@ -33,8 +33,8 @@
 
 inline volatile unsigned long long get_mtime(void) { return MTIME; }
 
-//#define	SYSTEM_CLOCK_HZ	58333000
-#define	SYSTEM_CLOCK_HZ	50000000
+#define	SYSTEM_CLOCK_HZ	58333000
+//#define	SYSTEM_CLOCK_HZ	50000000
 //#define	SYSTEM_CLOCK_HZ	65000000
 //#define	SYSTEM_CLOCK_HZ	62000000
 //#define	SYSTEM_CLOCK_HZ	60000000

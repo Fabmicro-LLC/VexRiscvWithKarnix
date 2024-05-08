@@ -11,6 +11,7 @@
 #include "i2c.h"
 #include "uart.h"
 #include "utils.h"
+#include "modbus.h"
 #include "modbus_udp.h"
 #include "modbus_rtu.h"
 #include "eeprom.h"
@@ -33,11 +34,6 @@ extern struct netif default_netif;
 
 void println(const char*str);
 
-volatile uint32_t reg_irq_counter = 0;
-volatile uint32_t reg_sys_counter = 0;
-volatile uint32_t reg_scratch = 0;
-volatile uint32_t reg_config_write = 0;
-
 volatile uint32_t uart_config_reset_counter = 0;
 volatile uint32_t events_mac_poll = 0;
 volatile uint32_t events_mac_rx = 0;
@@ -46,6 +42,7 @@ volatile uint32_t events_modbus_rtu_rx = 0;
 
 volatile uint32_t audiodac0_irqs = 0;
 volatile uint32_t audiodac0_samples_sent = 0;
+volatile uint32_t cga_vblank_irqs = 0;
 
 uint32_t deadbeef = 0;		// If not zero - we are in soft-start mode
 
@@ -97,6 +94,7 @@ volatile unsigned long long t1, t2;
 void process_and_wait(uint32_t us) {
 
 	unsigned long long t0, t;
+	static unsigned int skip = 0;
 
 	t0 = get_mtime();
 
@@ -105,6 +103,9 @@ void process_and_wait(uint32_t us) {
 
 		if(t - t0 >= us)
 			break;
+
+		//if((skip++ % 20000) == 0)
+		//	cga_rotate_palette_left(2);
 
 		// Process events
 		//
@@ -237,29 +238,163 @@ void test_byte_access(void) {
 }
 
 
-void cga_fill_screen(char color) {
-	uint32_t *fb = (uint32_t*) CGA->FB;
-
-	color = color & 0x3;
-
-	uint32_t filler = (color << 30) | (color << 28) | (color << 26) | (color << 24);
-		 filler |= (filler >> 8) | (filler >> 16) | (filler >> 24);
-
-	for(int i = 0; i < 320*240*2/32;  i++)
-		*fb++ = filler; 
-
-}
-
-
 void cga_test2(void) {
 
 	while(1) {
-		while(!(CGA->CTRL & CGA_CTRL_VSYNC_FLAG));
+		while(!(CGA->CTRL & CGA_CTRL_VBLANK_FLAG));
 		cga_fill_screen(rand());
-		while(CGA->CTRL & CGA_CTRL_VSYNC_FLAG);
+		while(CGA->CTRL & CGA_CTRL_VBLANK_FLAG);
 	}
 }
 
+void cga_test3(void) {
+
+	char *text = "01234567890123456789ABCDEF";
+	int color = (rand() % 4 + 1) * 16 + rand() % 4 + 1;
+
+	cga_wait_vblank();
+
+	uint32_t t0 = get_mtime() & 0xffffffff;
+
+	for(int y = 0; y < 240-16; y += 16)
+		cga_video_print(0, y, color, text, strlen(text), font_12x16, 12, 16);
+
+	uint32_t t1 = get_mtime() & 0xffffffff;
+
+	printf("cga_test3: t0 = %lu, t1 = %lu, delta = %lu uS\r\n", t0, t1, t1 - t0);
+}
+
+void cga_test4(void) {
+
+	char *text = "0123456789i0123456789012345678901234567890123456789";
+	int color = (rand() % 4 + 1) * 16 + rand() % 4 + 1;
+
+	cga_wait_vblank();
+
+	uint32_t t0 = get_mtime() & 0xffffffff;
+
+	for(int y = 0; y < 240-8; y += 8)
+		cga_video_print(0, y, color, text, strlen(text), font_6x8, 6, 8);
+
+	uint32_t t1 = get_mtime() & 0xffffffff;
+
+	printf("cga_test4: t0 = %lu, t1 = %lu, delta = %lu uS\r\n", t0, t1, t1 - t0);
+}
+
+static int _x = 0, _y = 0;
+static int _sprite_idx = 0;
+
+void cga_test5(void) {
+
+	static uint8_t sprite[][4*16] = { // 16x16x2
+		{
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00010101, 0b01010101, 0b01010101, 0b01010100,
+		0b00010000, 0b00000000, 0b00000000, 0b00000100,
+		0b00010001, 0b01010101, 0b01010101, 0b01000100,
+		0b00010001, 0b00000000, 0b00000000, 0b01000100,
+		0b00010001, 0b00101010, 0b10101000, 0b01000100,
+		0b00010001, 0b00100000, 0b00001000, 0b01000100,
+		0b00010001, 0b00100111, 0b10001000, 0b01000100,
+		0b00010001, 0b00100111, 0b10001000, 0b01000100,
+		0b00010001, 0b00100000, 0b00001000, 0b01000100,
+		0b00010001, 0b00101010, 0b10101000, 0b01000100,
+		0b00010001, 0b00000000, 0b00000000, 0b01000100,
+		0b00010001, 0b01010101, 0b01010101, 0b01000100,
+		0b00010000, 0b00000000, 0b00000000, 0b00000100,
+		0b00010101, 0b01010101, 0b01010101, 0b01010100,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000
+		},
+		{
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000101, 0b01010101, 0b01010101, 0b01010000,
+		0b00000101, 0b01010101, 0b01010101, 0b01010000,
+		0b00000101, 0b00000000, 0b00000000, 0b01010000,
+		0b00000101, 0b00101010, 0b10101000, 0b01010000,
+		0b00000101, 0b00100000, 0b00001000, 0b01010000,
+		0b00000101, 0b00100101, 0b10001000, 0b01010000,
+		0b00000101, 0b00100101, 0b10001000, 0b01010000,
+		0b00000101, 0b00100000, 0b00001000, 0b01010000,
+		0b00000101, 0b00101010, 0b10101000, 0b01010000,
+		0b00000101, 0b00000000, 0b00000000, 0b01010000,
+		0b00000101, 0b01010101, 0b01010101, 0b01010000,
+		0b00000101, 0b01010101, 0b01010101, 0b01010000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000
+		},
+		{
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000001, 0b01010101, 0b01010101, 0b01000000,
+		0b00000001, 0b00000000, 0b00000000, 0b01000000,
+		0b00000001, 0b00101010, 0b10101000, 0b01000000,
+		0b00000001, 0b00100000, 0b00001000, 0b01000000,
+		0b00000001, 0b00100101, 0b10001000, 0b01000000,
+		0b00000001, 0b00100101, 0b10001000, 0b01000000,
+		0b00000001, 0b00100000, 0b00001000, 0b01000000,
+		0b00000001, 0b00101010, 0b10101000, 0b01000000,
+		0b00000001, 0b00000000, 0b00000000, 0b01000000,
+		0b00000001, 0b01010101, 0b01010101, 0b01000000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000,
+		0b00000000, 0b00000000, 0b00000000, 0b00000000
+		}
+	};
+
+
+	uint32_t t0 = get_mtime() & 0xffffffff;
+
+
+	//cga_wait_vblank();
+
+	//CGA->CTRL |= CGA_CTRL_BLANKING_EN; // blank screen
+
+	//cga_fill_screen(0);
+
+	for(int y = 0; y < 240; y += 16)
+		for(int x = 0; x < 320; x += 16)
+			cga_bitblit(x + _x, y + _y, (uint8_t*)sprite[_sprite_idx], 16, 16);
+
+	//CGA->CTRL &= ~CGA_CTRL_BLANKING_EN; // restore video
+
+	uint32_t t1 = get_mtime() & 0xffffffff;
+
+	printf("cga_test5: t = %lu uS\r\n", t1 - t0);
+
+	_sprite_idx = (_sprite_idx + 1) % 3;
+	//_x += rand() % 2 - rand() % 2;
+	//_y += rand() % 2 - rand() % 2;
+}
+
+void cga_test6(void) {
+	static int x1 = 10, y1 = 10, x2 = 300, y2 = 200; 
+	uint32_t t0 = get_mtime() & 0xffffffff;
+
+	int color = rand() % 3 + 1;
+
+	cga_wait_vblank();
+
+	//cga_fill_screen(0);
+
+	for(int i = 0; i < 100; i++) {
+		cga_draw_line(x1, y1, x2, y2, color);
+		x1 += rand() % 2 - rand() % 2;
+		y1 += rand() % 2 - rand() % 2;
+		x2 += rand() % 2 - rand() % 2;
+		y2 += rand() % 2 - rand() % 2;
+		if(x1 > 320) x1 = x1 - 320;
+		if(x2 > 320) x2 = x2 - 320;
+		if(y1 > 240) y1 = y1 - 240;
+		if(y2 > 240) y2 = y2 - 240;
+	}
+
+	uint32_t t1 = get_mtime() & 0xffffffff;
+
+	printf("cga_test6: t0 = %lu, t1 = %lu, delta = %lu uS\r\n", t0, t1, t1 - t0);
+
+}
 
 void cga_test(void) {
 	static int X = 0, Y = 0;
@@ -344,7 +479,7 @@ void main() {
 		BUILD_NUMBER
 	);
 
-	GPIO->OUTPUT |= (1 << LED_R); // LED_R is ON - indicate we are not yet ready
+	GPIO->OUTPUT |= GPIO_OUT_LED0; // LED0 is ON - indicate we are not yet ready
 
 	printf("Hardware init\r\n");
 
@@ -361,19 +496,19 @@ void main() {
 		printf("SRAM %s!\r\n", "disabled"); 
 	}
 
-	cga_ram_test(10);
+	cga_ram_test(1);
 
-	cga_set_palette(0x00000000, 0x000000ff, 0x0000ff00, 0x00ff0000);
+	cga_set_palette(0x00000000, 0x000000f0, 0x0000f000, 0x00f00000);
 
 	printf("Executing CGA video framebuffer performance test...\r\n");
 
-	uint64_t cga_t0 = get_mtime();
-	for(int i = 0; i < 10000; i++) {
+	uint32_t cga_t0 = get_mtime();
+	for(int i = 0; i < 1000; i++) {
 		cga_fill_screen(rand()); // use color #1 (red) 
 	}
-	uint64_t cga_t1 = get_mtime();
+	uint32_t cga_t1 = get_mtime();
 
-	printf("CGA framebuffer perf: %ld uS after 10000 frames\r\n", (uint32_t)(cga_t1 - cga_t0));
+	printf("CGA framebuffer perf: %ld uS after 1000 frames\r\n", cga_t1 - cga_t0);
 
 	//cga_test2();
 
@@ -381,7 +516,7 @@ void main() {
 	//HUB->CONTROL = 0;
 
 	// Enable writes to EEPROM
-	GPIO->OUTPUT &= ~(1 << EEPROM_WP); 
+	GPIO->OUTPUT &= ~GPIO_OUT_EEPROM_WP; 
 
 	// Configure interrupt controller 
 	PLIC->POLARITY = 0x0000007f; // Configure PLIC IRQ polarity for UART0, UART1, MAC, I2C and AUDIODAC0 to Active High 
@@ -418,11 +553,11 @@ void main() {
 	printf("Press '*' to reset config");
 	fflush(stdout);
 
-	for(int i = 0; i < 10; i++) {
+	for(int i = 0; i < 5; i++) {
 		if(uart_config_reset_counter > 2) // has user typed *** on the console ?
 			break;
 
-		if((GPIO->INPUT & (1 << CONFIG_PIN)) == 0) // is CONFIG pin tied to ground ?
+		if((GPIO->INPUT & GPIO_IN_CONFIG_PIN) == 0) // is CONFIG pin tied to ground ?
 			break;
 
 		putchar('.');
@@ -437,7 +572,7 @@ void main() {
 	if(uart_config_reset_counter > 2) {
 		uart_config_reset_counter = 0;
 		printf("Defaults loaded by %s!\r\n", "user request");
- 	} else if((GPIO->INPUT & (1 << CONFIG_PIN)) == 0) {
+ 	} else if((GPIO->INPUT & GPIO_IN_CONFIG_PIN) == 0) {
 		printf("Defaults loaded by %s!\r\n", "CONFIG pin");
 	} else {
 		if(eeprom_probe(I2C0) == 0) {
@@ -473,7 +608,8 @@ void main() {
 
 	printf("Hardware init done\r\n");
 
-	GPIO->OUTPUT &= ~((1 << LED_R) | (1 << LED_G) | (1 << LED_B)); // GPIO LEDs are OFF -all things are done well 
+       	// GPIO LEDs are OFF - all things do well 
+	GPIO->OUTPUT &= ~(GPIO_OUT_LED0 | GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
 	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts
 
@@ -528,19 +664,21 @@ void main() {
 	while(1) {
 		int audio_idx = 0;
 
-		GPIO->OUTPUT |= (1 << LED_G); // LED_G is ON
+		GPIO->OUTPUT |= GPIO_OUT_LED1; // ON: LED1 - ready
 
-    		process_and_wait(500000); 
+    		//process_and_wait(5000); 
 
-		GPIO->OUTPUT &= ~(1 << LED_G); // LED_G is OFF
+	       	// OFF: LED1 - ready, LED2 - MAC/MODBUS Error, LED3 - UART I/O
+		GPIO->OUTPUT &= ~(GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
-    		process_and_wait(500000); 
+    		//process_and_wait(5000); 
 
-
-		if(1) {
-			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, audiodac0_samples_sent = %d, audiodac0_irqs = %d\r\n",
+		if(0) {
+			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, "
+				"audiodac0_samples_sent = %d, audiodac0_irqs = %d, vblank_irqs = %d\r\n",
 				BUILD_NUMBER,
-				reg_irq_counter, reg_sys_counter, reg_scratch, sbrk_heap_end, audiodac0_samples_sent, audiodac0_irqs);
+				reg_irq_counter, reg_sys_counter, reg_scratch, sbrk_heap_end,
+				audiodac0_samples_sent, audiodac0_irqs, cga_vblank_irqs);
 
 			plic_print_stats();
 
@@ -551,7 +689,23 @@ void main() {
 			x = x + 0.1;
 
 		}
+
+		if(GPIO->INPUT & GPIO_IN_KEY0)
+			_x++;
+
+		if(GPIO->INPUT & GPIO_IN_KEY3)
+			_x--;
 	
+		if(GPIO->INPUT & GPIO_IN_KEY1)
+			_y--;
+	
+		if(GPIO->INPUT & GPIO_IN_KEY2)
+			_y++;
+
+		cga_test5();
+
+		//cga_test6();
+
 		//cga_test();
 		//sram_test_write_shorts();
 		//sram_test_write_random_ints();
@@ -581,7 +735,7 @@ void main() {
 		if(reg_config_write)
 			reg_config_write--;
 
-		GPIO->OUTPUT &= ~(1 << LED_R); // LED_G is OFF - clear error indicator
+		GPIO->OUTPUT &= ~GPIO_OUT_LED0; // LED0 is OFF - clear error indicator
 
 	}
 }
@@ -596,7 +750,7 @@ void timerInterrupt(void) {
 void externalInterrupt(void){
 
 	if(PLIC->PENDING & PLIC_IRQ_UART0) { // UART0 is pending
-		GPIO->OUTPUT |= (1 << LED_R); // LED_R is ON
+		GPIO->OUTPUT |= GPIO_OUT_LED3; // LED0 is ON
 		//printf("UART0: ");
 		while(uart_readOccupancy(UART0)) {
 			char c = UART0->DATA;
@@ -650,6 +804,11 @@ void externalInterrupt(void){
 		PLIC->PENDING &= ~PLIC_IRQ_AUDIODAC0;
 	}
 
+	if(PLIC->PENDING & PLIC_IRQ_CGA_VBLANK) { // CGA vertical blanking 
+		//print("VBLANK IRQ\r\n");
+		cga_vblank_irqs++;
+		PLIC->PENDING &= ~PLIC_IRQ_CGA_VBLANK;
+	}
 }
 
 
