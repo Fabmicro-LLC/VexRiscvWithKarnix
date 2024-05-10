@@ -288,4 +288,12 @@ void cga_draw_line(int x0, int y0, int x1, int y1, int color) {
 }
 
 
+void cga_set_video_mode(int mode) {
+	printf("cga_set_video_mode: old ctrl = %p\r\n", CGA->CTRL);
+	CGA->CTRL &= ~CGA_CTRL_VIDEO_MODE;
+	CGA->CTRL |= (mode << CGA_CTRL_VIDEO_MODE_SHIFT) & CGA_CTRL_VIDEO_MODE;
+
+	printf("cga_set_video_mode: mode = %d, ctrl = %p\r\n", mode, CGA->CTRL);
+}
+
 

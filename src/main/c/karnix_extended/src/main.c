@@ -396,6 +396,23 @@ void cga_test6(void) {
 
 }
 
+void cga_test7(void) {
+	uint32_t *fb = (uint32_t*) CGA->FB;
+
+	cga_wait_vblank();
+
+	uint32_t t0 = get_mtime() & 0xffffffff;
+
+	for(int y = 0; y < 30; y++)
+		for(int x = 0; x < 80; x++) {
+			fb[y * 80 + x] = ('0' + x) | ((x & 0x3) << 8) | ((y & 0x3) << 12); 
+		}
+
+	uint32_t t1 = get_mtime() & 0xffffffff;
+
+	printf("cga_test7: t = %lu uS\r\n", t1 - t0);
+}
+
 void cga_test(void) {
 	static int X = 0, Y = 0;
 
@@ -499,6 +516,9 @@ void main() {
 	cga_ram_test(1);
 
 	cga_set_palette(0x00000000, 0x000000f0, 0x0000f000, 0x00f00000);
+
+	cga_set_video_mode(CGA_MODE_GRAPHICS1);
+	//cga_set_video_mode(CGA_MODE_TEXT);
 
 	printf("Executing CGA video framebuffer performance test...\r\n");
 
@@ -702,9 +722,9 @@ void main() {
 		if(GPIO->INPUT & GPIO_IN_KEY2)
 			_y++;
 
-		cga_test5();
+		//cga_test7(); // Text mode
 
-		//cga_test6();
+		cga_test5(); // full screen bitblit
 
 		//cga_test();
 		//sram_test_write_shorts();
