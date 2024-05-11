@@ -129,7 +129,7 @@ object BrieyForKarnixConfig{
           compressedGen = true,
           injectorStage = true,
           config = InstructionCacheConfig(
-            cacheSize = 2048,
+            cacheSize = 1024,
             bytePerLine = 32,
             wayCount = 1,
             addressWidth = 32,
