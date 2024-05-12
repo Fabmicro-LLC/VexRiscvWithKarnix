@@ -403,14 +403,29 @@ void cga_test7(void) {
 
 	uint32_t t0 = get_mtime() & 0xffffffff;
 
-	for(int y = 0; y < 30; y++)
+	for(int y = 0; y < 60; y++)
 		for(int x = 0; x < 80; x++) {
-			fb[y * 80 + x] = ('0' + x) | ((x & 0x3) << 8) | ((y & 0x3) << 12); 
+			fb[y * 80 + x] = ('0' + y);
+			fb[y * 80 + x] |= (x & 0x3) << 8;
+			if(y < 30)
+				fb[y * 80 + x] |= 1 << 12; 
+			else
+				fb[y * 80 + x] |= 2 << 12; 
 		}
 
 	uint32_t t1 = get_mtime() & 0xffffffff;
 
-	printf("cga_test7: t = %lu uS\r\n", t1 - t0);
+	printf("cga_test7: t = %lu uS, _y = %d\r\n", t1 - t0, _y);
+
+	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+	if(_y >= 0) {
+		CGA->CTRL &= ~CGA_CTRL_V_SCROLL_DIR;
+		CGA->CTRL |= (_y << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
+	} else {
+		CGA->CTRL |= CGA_CTRL_V_SCROLL_DIR;
+		CGA->CTRL |= ((-_y) << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
+	}
+
 }
 
 void cga_test(void) {
@@ -517,8 +532,8 @@ void main() {
 
 	cga_set_palette(0x00000000, 0x000000f0, 0x0000f000, 0x00f00000);
 
-	cga_set_video_mode(CGA_MODE_GRAPHICS1);
-	//cga_set_video_mode(CGA_MODE_TEXT);
+	//cga_set_video_mode(CGA_MODE_GRAPHICS1);
+	cga_set_video_mode(CGA_MODE_TEXT);
 
 	printf("Executing CGA video framebuffer performance test...\r\n");
 
@@ -686,12 +701,12 @@ void main() {
 
 		GPIO->OUTPUT |= GPIO_OUT_LED1; // ON: LED1 - ready
 
-    		//process_and_wait(5000); 
+    		process_and_wait(50000); 
 
 	       	// OFF: LED1 - ready, LED2 - MAC/MODBUS Error, LED3 - UART I/O
 		GPIO->OUTPUT &= ~(GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
-    		//process_and_wait(5000); 
+    		process_and_wait(50000); 
 
 		if(0) {
 			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, "
@@ -722,9 +737,9 @@ void main() {
 		if(GPIO->INPUT & GPIO_IN_KEY2)
 			_y++;
 
-		//cga_test7(); // Text mode
+		cga_test7(); // Text mode
 
-		cga_test5(); // full screen bitblit
+		//cga_test5(); // full screen bitblit
 
 		//cga_test();
 		//sram_test_write_shorts();
