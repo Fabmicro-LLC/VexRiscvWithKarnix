@@ -1,6 +1,7 @@
 #include "cga.h"
 #include "soc.h"
 #include "utils.h"
+#include <string.h>
 
 void cga_set_palette(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3) {
 	CGA->PALETTE[0] = c0;
@@ -295,5 +296,38 @@ void cga_set_video_mode(int mode) {
 
 	printf("cga_set_video_mode: mode = %d, ctrl = %p\r\n", mode, CGA->CTRL);
 }
+
+
+/*
+ * Smoothly scroll all the text on the screen upwards by 16 pixels (one line).
+ *
+ * scroll_delay - delay in microseconds between steps.
+ *
+ */
+void cga_text_scroll_up(int scroll_delay) {
+	uint32_t *fb = (uint32_t*) CGA->FB;
+
+	CGA->CTRL &= ~CGA_CTRL_V_SCROLL_DIR; 
+
+	for(int i = 0; i < 16; i++) {
+		cga_wait_vblank();
+		CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+		CGA->CTRL |= (i & 0x0f) << CGA_CTRL_V_SCROLL_SHIFT;
+		delay_us(scroll_delay);
+	}
+
+	cga_wait_vblank();
+
+	for(int col = 0; col < CGA_TEXT_WIDTH; col++) {
+		uint32_t tmp = fb[col];
+		for(int row = 0; row < CGA_TEXT_HEIGHT * 2 - 1; row++) {
+			fb[row * CGA_TEXT_WIDTH + col] = fb[row * CGA_TEXT_WIDTH + col + CGA_TEXT_WIDTH];
+		}
+		fb[(CGA_TEXT_HEIGHT * 2 - 1) * CGA_TEXT_WIDTH + col] = tmp;
+	}
+
+	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+}
+
 
 

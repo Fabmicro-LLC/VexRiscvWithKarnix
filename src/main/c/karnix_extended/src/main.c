@@ -696,17 +696,19 @@ void main() {
 
 	float x = 1.1;
 
+	cga_test7(); // Text mode
+
 	while(1) {
 		int audio_idx = 0;
 
 		GPIO->OUTPUT |= GPIO_OUT_LED1; // ON: LED1 - ready
 
-    		process_and_wait(50000); 
+    		process_and_wait(500000); 
 
 	       	// OFF: LED1 - ready, LED2 - MAC/MODBUS Error, LED3 - UART I/O
 		GPIO->OUTPUT &= ~(GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
-    		process_and_wait(50000); 
+    		process_and_wait(500000); 
 
 		if(0) {
 			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, "
@@ -737,7 +739,7 @@ void main() {
 		if(GPIO->INPUT & GPIO_IN_KEY2)
 			_y++;
 
-		cga_test7(); // Text mode
+		cga_text_scroll_up(10000);
 
 		//cga_test5(); // full screen bitblit
 
