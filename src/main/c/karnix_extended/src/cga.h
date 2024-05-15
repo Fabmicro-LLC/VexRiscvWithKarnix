@@ -21,9 +21,9 @@ extern const char font_12x16[];
 #define	CGA_CTRL_HSYNC_FLAG		(1 << 21)	
 #define	CGA_CTRL_VSYNC_FLAG		(1 << 20)	
 #define	CGA_CTRL_VBLANK_FLAG		(1 << 19)	
-#define	CGA_CTRL_V_SCROLL_DIR		(1 << 4)	
+#define	CGA_CTRL_V_SCROLL_DIR		(1 << 10)	
 #define	CGA_CTRL_V_SCROLL_SHIFT		0	
-#define	CGA_CTRL_V_SCROLL		(0xf << CGA_CTRL_V_SCROLL_SHIFT)
+#define	CGA_CTRL_V_SCROLL		(0x03ff << CGA_CTRL_V_SCROLL_SHIFT)
 
 #define	CGA_MODE_TEXT		0
 #define	CGA_MODE_GRAPHICS1	1

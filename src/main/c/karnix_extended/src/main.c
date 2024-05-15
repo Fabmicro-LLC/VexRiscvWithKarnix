@@ -405,12 +405,13 @@ void cga_test7(void) {
 
 	for(int y = 0; y < 60; y++)
 		for(int x = 0; x < 80; x++) {
-			fb[y * 80 + x] = ('0' + y);
+			fb[y * 80 + x] = ('0' + x) & 0xff;
 			fb[y * 80 + x] |= (x & 0x3) << 8;
-			if(y < 30)
-				fb[y * 80 + x] |= 1 << 12; 
-			else
-				fb[y * 80 + x] |= 2 << 12; 
+			if(y < 30) {
+				fb[y * 80 + x] |= ((y&3) << 16); 
+			} else {
+				fb[y * 80 + x] |= ((3-(y&3)) << 16); 
+			}
 		}
 
 	uint32_t t1 = get_mtime() & 0xffffffff;
@@ -425,6 +426,8 @@ void cga_test7(void) {
 		CGA->CTRL |= CGA_CTRL_V_SCROLL_DIR;
 		CGA->CTRL |= ((-_y) << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
 	}
+
+	printf("cga_test7: fb[1, 30] = %p, fb[1, 31] = %p\r\n", fb[1 + 30 * CGA_TEXT_WIDTH], fb[1 + 31 * CGA_TEXT_WIDTH]);
 
 }
 
@@ -703,12 +706,12 @@ void main() {
 
 		GPIO->OUTPUT |= GPIO_OUT_LED1; // ON: LED1 - ready
 
-    		process_and_wait(500000); 
+    		process_and_wait(25000); 
 
 	       	// OFF: LED1 - ready, LED2 - MAC/MODBUS Error, LED3 - UART I/O
 		GPIO->OUTPUT &= ~(GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
-    		process_and_wait(500000); 
+    		process_and_wait(25000); 
 
 		if(0) {
 			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, "
@@ -739,9 +742,10 @@ void main() {
 		if(GPIO->INPUT & GPIO_IN_KEY2)
 			_y++;
 
-		cga_text_scroll_up(10000);
+		cga_text_scroll_up(50000);
 
 		//cga_test5(); // full screen bitblit
+		//cga_test7(); // Text mode
 
 		//cga_test();
 		//sram_test_write_shorts();

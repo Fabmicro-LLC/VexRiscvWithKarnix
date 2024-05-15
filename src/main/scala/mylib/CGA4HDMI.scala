@@ -57,8 +57,8 @@ case class Apb3CGA4HDMICtrl(
   val video_enabled = cgaCtrlWord(31).addTag(crossClockDomain) 
   val blanking_enabled = cgaCtrlWord(30).addTag(crossClockDomain) 
   val video_mode = cgaCtrlWord(25 downto 24).addTag(crossClockDomain)
-  val scroll_v_dir = cgaCtrlWord(4).addTag(crossClockDomain) 
-  val scroll_v = cgaCtrlWord(3 downto 0).asUInt.addTag(crossClockDomain) 
+  val scroll_v_dir = cgaCtrlWord(10).addTag(crossClockDomain) 
+  val scroll_v = cgaCtrlWord(9 downto 0).asUInt.addTag(crossClockDomain) 
 
   // Define memory block for CGA framebuffer
   val fb_mem = Mem(Bits(32 bits), wordCount = (320*240*2) / 32)
@@ -172,8 +172,6 @@ case class Apb3CGA4HDMICtrl(
     encoder_B.VDE := DE
     TMDS_blue := encoder_B.TMDS
 
-    val palette_buf = Mem(Bits(32 bits), wordCount = 16) // Pallete registers buffered
-
     val CounterX = Reg(UInt(10 bits))
     val CounterY = Reg(UInt(10 bits))
 
@@ -207,40 +205,31 @@ case class Apb3CGA4HDMICtrl(
 
       is(B"00") { // Tex mode: 80x30 characters each 8x16 pixels
 
-        //val CounterY_ = (CounterY + scroll_v_)
-        //val CounterY_ = CounterY //(CounterY + scroll_v_)
         val CounterY_ = (scroll_v_dir ? (CounterY - scroll_v) | (CounterY + scroll_v))
+        //val CounterY_ = (scroll_v_dir ? (CounterY - BufferCC(scroll_v)) | (CounterY + BufferCC(scroll_v)))
 
         // Load flag active on each 6th and 7th pixel
-        //word_load := (CounterX >= U(32 - 8) && CounterX < U(672)) && (CounterY < U(480+16)) && ((CounterX & U(6)) === U(6))
-        word_load := (CounterX >= U(32 - 8) && CounterX < U(672)) && (CounterY_ < 480+16) && ((CounterX & U(6)) === U(6))
+        word_load := (CounterX >= U(32 - 8) && CounterX < U(672)) && (CounterY_ < 480+16+16) && ((CounterX & U(6)) === U(6))
 
         // Index of the 32 bit word in framebufffer memory: addr = (y / 16) * 80 + x/8
-        //word_address := ((CounterY - 16)(8 downto 4) * 80 + (CounterX - (32 - 8))(9 downto 3)).resized
         word_address := ((CounterY_ - 16)(8 downto 4) * 80 + (CounterX - (32 - 8))(9 downto 3)).resized
 
-        //val char_row = CounterY(3 downto 0)
-        //val char_row_big = (CounterY(3 downto 0).resize(5) + BufferCC(scroll_v).resize(5))
-        //val char_row = (char_row_big(4).asBool ? 15 | char_row_big.resize(4))
-        //val char_row = CounterY(3 downto 0) + BufferCC(scroll_v)
         val char_row = CounterY_(3 downto 0)
         val char_mask = Reg(Bits(8 bits))
           
         val char_idx = word(7 downto 0)
         val char_fg_color = word(11 downto 8).asUInt
-        val char_bg_color = word(15 downto 12).asUInt
+        val char_bg_color = word(19 downto 16).asUInt
 
         when((CounterX & 7) === 7) {
           char_mask := B"10000000"
         } otherwise {
-          //char_mask := (char_mask >> 1).resized
           char_mask := B"0" ## char_mask(7 downto 1)
         }
 
         val char_data = chargen_mem((char_idx ## char_row).asUInt).asBits
 
         when(DE && blanking_not_enabled) {
-        //when(DE) {
 
           when((char_data & char_mask) =/= 0) {
             red := palette_mem(char_fg_color).asBits(7 downto 0)
@@ -256,10 +245,6 @@ case class Apb3CGA4HDMICtrl(
           red := 0
           green := 0
           blue := 0 
-
-          // Copy palette to palette buffer twice 
-          palette_buf(CounterX(4 downto 1)) := BufferCC(palette_mem(CounterX(4 downto 1)))
-
         }
       }
 
@@ -272,7 +257,6 @@ case class Apb3CGA4HDMICtrl(
         word_address := ((CounterY - 16)(9 downto 1) * 20 + CounterX(9 downto 5)).resized
 
         when(DE && blanking_not_enabled) {
-        //when(DE) {
 
           val color = UInt(4 bits)
 
@@ -286,10 +270,6 @@ case class Apb3CGA4HDMICtrl(
           red := 0
           green := 0
           blue := 0 
-
-          // Copy palette to palette buffer twice 
-          palette_buf(CounterX(4 downto 1)) := BufferCC(palette_mem(CounterX(4 downto 1)))
-
         }
       }
 

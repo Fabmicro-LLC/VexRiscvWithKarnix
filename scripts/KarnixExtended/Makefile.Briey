@@ -45,11 +45,13 @@ hexx2bin: hexx2bin.c
 
 bin/BrieyForKarnixTopLevel.json : ${VERILOG} ../../BrieyForKarnixTopLevel.v*.bin
 	mkdir -p bin
+	#yosys -v2 -p "synth_ecp5 -top BrieyForKarnixTopLevel -json bin/BrieyForKarnixTopLevel.json" ${VERILOG}
 	yosys -v2 -p "synth_ecp5 -abc9 -top BrieyForKarnixTopLevel -json bin/BrieyForKarnixTopLevel.json" ${VERILOG}
 	#yosys -v2 -e ABC -p "synth_ecp5 -abc9 -top BrieyForKarnixTopLevel -json bin/BrieyForKarnixTopLevel.json" ${VERILOG}
 
 bin/BrieyForKarnixTopLevel_random_25F.config : karnix_cabga256.lpf bin/BrieyForKarnixTopLevel.json
-	nextpnr-ecp5 --seed 1122 --speed 8 --25k --lpf karnix_cabga256.lpf --placed-svg bin/BrieyForKarnixTopLevel_placed.svg --package CABGA256 --json bin/BrieyForKarnixTopLevel.json --textcfg $@ 
+	#nextpnr-ecp5 --seed 1122 --speed 8 --25k --lpf karnix_cabga256.lpf --placed-svg bin/BrieyForKarnixTopLevel_placed.svg --package CABGA256 --json bin/BrieyForKarnixTopLevel.json --textcfg $@ 
+	nextpnr-ecp5 --seed 1122 --speed 8 --25k --parallel-refine --lpf karnix_cabga256.lpf --placed-svg bin/BrieyForKarnixTopLevel_placed.svg --package CABGA256 --json bin/BrieyForKarnixTopLevel.json --textcfg $@ 
 
 bin/BrieyForKarnixTopLevel_25F.config: bin/BrieyForKarnixTopLevel_random_25F.config ../../src/main/c/karnix_extended/build/karnix_extended.hexx ../../BrieyForKarnixTopLevel_random.hexx
 	ecpbram -v -i bin/BrieyForKarnixTopLevel_random_25F.config -o bin/BrieyForKarnixTopLevel_25F.config -f ../../BrieyForKarnixTopLevel_random.hexx -t ../../src/main/c/karnix_extended/build/karnix_extended.hexx
