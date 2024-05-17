@@ -10,6 +10,7 @@ extern const char font_12x16[];
 #define	CGA_VIDEO_HEIGHT	240
 #define CGA_TEXT_WIDTH		80	
 #define	CGA_TEXT_HEIGHT		30	
+#define	CGA_TEXT_HEIGHT_TOTAL	64
 #define	CGA_FRAMEBUFFER_SIZE	(CGA_VIDEO_WIDTH*CGA_VIDEO_HEIGHT*2/8)
 #define	CGA_OR_FONT		0x08
 #define	CGA_OR_BG		0x80
@@ -58,6 +59,7 @@ void cga_draw_pixel(int x, int y, int color);
 void cga_draw_line(int x1, int y1, int x2, int y2, int color);
 void cga_set_video_mode(int mode);
 void cga_text_scroll_up(int scroll_delay);
+void cga_text_scroll_down(int scroll_delay);
 
 #endif /* __CGA_H__ */
 

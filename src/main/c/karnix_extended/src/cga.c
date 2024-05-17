@@ -290,7 +290,7 @@ void cga_draw_line(int x0, int y0, int x1, int y1, int color) {
 
 
 void cga_set_video_mode(int mode) {
-	printf("cga_set_video_mode: old ctrl = %p\r\n", CGA->CTRL);
+
 	CGA->CTRL &= ~CGA_CTRL_VIDEO_MODE;
 	CGA->CTRL |= (mode << CGA_CTRL_VIDEO_MODE_SHIFT) & CGA_CTRL_VIDEO_MODE;
 
@@ -320,14 +320,45 @@ void cga_text_scroll_up(int scroll_delay) {
 
 	for(int col = 0; col < CGA_TEXT_WIDTH; col++) {
 		uint32_t tmp = fb[col];
-		for(int row = 0; row < CGA_TEXT_HEIGHT * 2 - 1; row++) {
+		for(int row = 0; row < CGA_TEXT_HEIGHT_TOTAL - 1; row++) {
 			fb[row * CGA_TEXT_WIDTH + col] = fb[row * CGA_TEXT_WIDTH + col + CGA_TEXT_WIDTH];
 		}
-		fb[(CGA_TEXT_HEIGHT * 2 - 1) * CGA_TEXT_WIDTH + col] = tmp;
+		fb[(CGA_TEXT_HEIGHT_TOTAL - 1) * CGA_TEXT_WIDTH + col] = tmp;
 	}
 
 	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
 }
 
+
+/*
+ * Smoothly scroll all the text on the screen downwards by 16 pixels (one line).
+ *
+ * scroll_delay - delay in microseconds between steps.
+ *
+ */
+void cga_text_scroll_down(int scroll_delay) {
+	uint32_t *fb = (uint32_t*) CGA->FB;
+
+	CGA->CTRL |= CGA_CTRL_V_SCROLL_DIR; 
+
+	for(int i = 0; i < 16; i++) {
+		cga_wait_vblank();
+		CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+		CGA->CTRL |= (i & 0x0f) << CGA_CTRL_V_SCROLL_SHIFT;
+		delay_us(scroll_delay);
+	}
+
+	cga_wait_vblank();
+
+	for(int col = 0; col < CGA_TEXT_WIDTH; col++) {
+		uint32_t tmp = fb[(CGA_TEXT_HEIGHT_TOTAL - 1) * CGA_TEXT_WIDTH + col];
+		for(int row = CGA_TEXT_HEIGHT_TOTAL - 1; row > 0; row--) {
+			fb[row * CGA_TEXT_WIDTH + col] = fb[row * CGA_TEXT_WIDTH + col - CGA_TEXT_WIDTH];
+		}
+		fb[col] = tmp;
+	}
+
+	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+}
 
 

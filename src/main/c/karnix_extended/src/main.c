@@ -18,6 +18,12 @@
 #include "config.h"
 #include "hub.h"
 
+/* Enable CGA test */
+#define	CGA_TEST			CGA_TEST_TEXT_SCROLL
+
+#define	CGA_TEST_GRAPHICS_BITBLIT	1
+#define	CGA_TEST_TEXT_SCROLL		2
+
 
 /* Below is some linker specific stuff */
 extern unsigned int   _stack_start; /* Set by linker.  */
@@ -104,11 +110,8 @@ void process_and_wait(uint32_t us) {
 		if(t - t0 >= us)
 			break;
 
-		//if((skip++ % 20000) == 0)
-		//	cga_rotate_palette_left(2);
-
 		// Process events
-		//
+
 		if(events_modbus_rtu_poll) {
 			modbus_rtu_poll(); 
 			events_modbus_rtu_poll = 0;
@@ -403,15 +406,16 @@ void cga_test7(void) {
 
 	uint32_t t0 = get_mtime() & 0xffffffff;
 
-	for(int y = 0; y < 60; y++)
-		for(int x = 0; x < 80; x++) {
-			fb[y * 80 + x] = ('0' + x) & 0xff;
+	for(int y = 0; y < CGA_TEXT_HEIGHT_TOTAL; y++)
+		for(int x = 0; x < CGA_TEXT_WIDTH; x++) {
+			if(x < y)
+				fb[y * 80 + x] = ' ';
+			else
+				fb[y * 80 + x] = ('0' + x % 80) & 0xff;
+			
 			fb[y * 80 + x] |= (x & 0x3) << 8;
-			if(y < 30) {
-				fb[y * 80 + x] |= ((y&3) << 16); 
-			} else {
-				fb[y * 80 + x] |= ((3-(y&3)) << 16); 
-			}
+
+			fb[y * 80 + x] |= ((y&3) << 16); 
 		}
 
 	uint32_t t1 = get_mtime() & 0xffffffff;
@@ -426,8 +430,6 @@ void cga_test7(void) {
 		CGA->CTRL |= CGA_CTRL_V_SCROLL_DIR;
 		CGA->CTRL |= ((-_y) << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
 	}
-
-	printf("cga_test7: fb[1, 30] = %p, fb[1, 31] = %p\r\n", fb[1 + 30 * CGA_TEXT_WIDTH], fb[1 + 31 * CGA_TEXT_WIDTH]);
 
 }
 
@@ -535,9 +537,9 @@ void main() {
 
 	cga_set_palette(0x00000000, 0x000000f0, 0x0000f000, 0x00f00000);
 
-	//cga_set_video_mode(CGA_MODE_GRAPHICS1);
-	cga_set_video_mode(CGA_MODE_TEXT);
 
+
+	#ifdef CGA_TEST
 	printf("Executing CGA video framebuffer performance test...\r\n");
 
 	uint32_t cga_t0 = get_mtime();
@@ -549,6 +551,7 @@ void main() {
 	printf("CGA framebuffer perf: %ld uS after 1000 frames\r\n", cga_t1 - cga_t0);
 
 	//cga_test2();
+	#endif
 
 	// Disable HUB controller
 	//HUB->CONTROL = 0;
@@ -699,19 +702,26 @@ void main() {
 
 	float x = 1.1;
 
-	cga_test7(); // Text mode
+	#if CGA_TEST == CGA_TEST_GRAPHICS_BITBLIT
+	cga_set_video_mode(CGA_MODE_GRAPHICS1);
+	#endif
+
+	#if CGA_TEST == CGA_TEST_TEXT_SCROLL
+	cga_set_video_mode(CGA_MODE_TEXT);
+	cga_test7();
+	#endif
 
 	while(1) {
 		int audio_idx = 0;
 
 		GPIO->OUTPUT |= GPIO_OUT_LED1; // ON: LED1 - ready
 
-    		process_and_wait(25000); 
+    		process_and_wait(10000); 
 
 	       	// OFF: LED1 - ready, LED2 - MAC/MODBUS Error, LED3 - UART I/O
 		GPIO->OUTPUT &= ~(GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
-    		process_and_wait(25000); 
+    		process_and_wait(10000); 
 
 		if(0) {
 			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, "
@@ -730,24 +740,42 @@ void main() {
 
 		}
 
-		if(GPIO->INPUT & GPIO_IN_KEY0)
-			_x++;
+		#if CGA_TEST == CGA_TEST_GRAPHICS_BITBLIT
+	       	{
+			/* Test graphics mode bit blit */
 
-		if(GPIO->INPUT & GPIO_IN_KEY3)
-			_x--;
+			if(GPIO->INPUT & GPIO_IN_KEY0)
+				_x++;
+
+			if(GPIO->INPUT & GPIO_IN_KEY3)
+				_x--;
 	
-		if(GPIO->INPUT & GPIO_IN_KEY1)
-			_y--;
+			if(GPIO->INPUT & GPIO_IN_KEY1)
+				_y--;
 	
-		if(GPIO->INPUT & GPIO_IN_KEY2)
-			_y++;
+			if(GPIO->INPUT & GPIO_IN_KEY2)
+				_y++;
 
-		cga_text_scroll_up(50000);
+			cga_test5(); // full screen bitblit
+		}
+		#endif
 
-		//cga_test5(); // full screen bitblit
-		//cga_test7(); // Text mode
 
-		//cga_test();
+		#if CGA_TEST == CGA_TEST_TEXT_SCROLL
+		{
+			if(GPIO->INPUT & GPIO_IN_KEY0) { 
+				cga_text_scroll_up(5000);
+				printf("text scroll up\r\n");
+			}
+
+			if(GPIO->INPUT & GPIO_IN_KEY3) {
+				cga_text_scroll_down(5000);
+				printf("text scroll down\r\n");
+			}
+		}
+		#endif
+
+
 		//sram_test_write_shorts();
 		//sram_test_write_random_ints();
 
