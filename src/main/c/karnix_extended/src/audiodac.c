@@ -198,7 +198,7 @@ void audiodac_init(AUDIODAC_Reg* reg, int sample_rate) {
 	reg->data = AUDIO_DAC_CMD_DISABLE_SS0;
 
 	reg->data = AUDIO_DAC_CMD_ENABLE_SS0;
-	reg->data = 0b1010000000000000; // nLDAC = Low - contimuous update
+	reg->data = 0b1010000000000000; // nLDAC = Low - continuous update
 	reg->data = AUDIO_DAC_CMD_DISABLE_SS0;
 
 	printf("audiodac_init: divider = %d\r\n", audiodac_cfg.divider);
