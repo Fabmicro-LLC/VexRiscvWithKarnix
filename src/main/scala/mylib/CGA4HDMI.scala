@@ -61,7 +61,8 @@ case class Apb3CGA4HDMICtrl(
   val scroll_v = cgaCtrlWord(9 downto 0).asUInt.addTag(crossClockDomain) 
 
   // Define memory block for CGA framebuffer
-  val fb_mem = Mem(Bits(32 bits), wordCount = (320*240*2) / 32)
+  //val fb_mem = Mem(Bits(32 bits), wordCount = (320*240*2) / 32)
+  val fb_mem = Mem(Bits(32 bits), wordCount = (320*(240+16)*2) / 32)
   val fb_access = Bool()
   fb_access := io.apb.PENABLE && io.apb.PSEL(0) && io.apb.PADDR < 48*1024
 
@@ -201,18 +202,19 @@ case class Apb3CGA4HDMICtrl(
     // 32 bit word of char data
     word := fb_mem.readSync(address = word_address, enable = word_load, clockCrossing = true)
 
+    val CounterY_ = (scroll_v_dir ? (CounterY - scroll_v) | (CounterY + scroll_v))
+    //val CounterY_ = (scroll_v_dir ? (CounterY - BufferCC(scroll_v)) | (CounterY + BufferCC(scroll_v)))
+    
     switch(video_mode) {
 
       is(B"00") { // Tex mode: 80x30 characters each 8x16 pixels
 
-        val CounterY_ = (scroll_v_dir ? (CounterY - scroll_v) | (CounterY + scroll_v))
-        //val CounterY_ = (scroll_v_dir ? (CounterY - BufferCC(scroll_v)) | (CounterY + BufferCC(scroll_v)))
 
         // Load flag active on each 6th and 7th pixel
         word_load := (CounterX >= U(32 - 8) && CounterX < U(672)) && (CounterY_ < 480+16+16) && ((CounterX & U(6)) === U(6))
 
         // Index of the 32 bit word in framebufffer memory: addr = (y / 16) * 80 + x/8
-        word_address := ((CounterY_ - 16)(8 downto 4) * 80 + (CounterX - (32 - 8))(9 downto 3)).resized
+        word_address := ((CounterY_ - 16)(9 downto 4) * 80 + (CounterX - (32 - 8))(9 downto 3)).resized
 
         val char_row = CounterY_(3 downto 0)
         val char_mask = Reg(Bits(8 bits))
@@ -251,10 +253,10 @@ case class Apb3CGA4HDMICtrl(
       is(B"01") { // Graphics mode: 320x240, 2 bits per pixel with full color palette
 
         // Load flag active on each 30 and 31 pixel of 32 bit word
-        word_load := (CounterX >= 0 && CounterX < U(672)) && (CounterY < 480+16) && ((CounterX & U(30)) === U(30))
+        word_load := (CounterX >= 0 && CounterX < U(672)) && (CounterY_ < 480+16) && ((CounterX & U(30)) === U(30))
 
         // Index of the 32 bit word in framebufffer memory: addr = y * 20 + x/16
-        word_address := ((CounterY - 16)(9 downto 1) * 20 + CounterX(9 downto 5)).resized
+        word_address := ((CounterY_ - 16)(9 downto 1) * 20 + CounterX(9 downto 5)).resized
 
         when(DE && blanking_not_enabled) {
 
