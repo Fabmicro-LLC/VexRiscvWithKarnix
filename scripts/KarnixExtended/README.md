@@ -43,7 +43,8 @@ This SoC is based on VexRiscv RV32IMF ISA in the following configurations:
 - MUL/DIV
 - FPU (single precision)
 - AXI4 and APB3 buses
-- 96 KB of on-chip RAM
+- 72 KB of on-chip RAM
+- 512 KB external SRAM
 - PLIC with 32 bit channels
 - Two 32 bit timers
 - 1-us machine timer
@@ -53,6 +54,7 @@ This SoC is based on VexRiscv RV32IMF ISA in the following configurations:
 - I2C controller connected to EEPROM
 - SPI controller connected to AudioDAC
 - HUB12/HUB75 interface controller
+- CGA like video adapter with HDMI interface
 
 Fmax = 65 MHz
 
