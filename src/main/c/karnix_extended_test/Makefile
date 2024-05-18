@@ -1,4 +1,4 @@
-PROJ_NAME=karnix_extended
+PROJ_NAME=karnix_extended_test
 DEBUG=no
 BENCH=no
 MULDIV=yes
