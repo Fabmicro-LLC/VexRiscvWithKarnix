@@ -22,7 +22,7 @@ This SoC is based on VexRiscv RV32IM ISA in the following configurations:
 - PipelinedMemoryBus and APB3 buses
 - 96 KB of on-chip RAM
 - 512 KB of external SRAM
-- PLIC with 32 bit channels
+- PLIC with 32 IRQ channels
 - Two 32 bit timers
 - 1-us machine timer
 - PWM timer
@@ -45,7 +45,7 @@ This SoC is based on VexRiscv RV32IMF ISA in the following configurations:
 - AXI4 and APB3 buses
 - 72 KB of on-chip RAM
 - 512 KB external SRAM
-- PLIC with 32 bit channels
+- PLIC with 32 IRQ channels
 - Two 32 bit timers
 - 1-us machine timer
 - PWM timer
