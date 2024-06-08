@@ -5,24 +5,38 @@ import spinal.lib._
 import spinal.lib.io.TriState
 
 case class HDMIInterface() extends Bundle with IMasterSlave{
-        val tmds_p = Bits(3 bits)
-        val tmds_n = Bits(3 bits)
-        val tmds_clk_p = Bool() 
-        val tmds_clk_n = Bool() 
+	val tmds_p = Bits(3 bits)
+	val tmds_n = Bits(3 bits)
+	val tmds_clk_p = Bool() 
+	val tmds_clk_n = Bool() 
 
-        override def asMaster(): Unit = {
-                out(tmds_p, tmds_n, tmds_clk_p, tmds_clk_n)
-      }
+	override def asMaster(): Unit = {
+		out(tmds_p, tmds_n, tmds_clk_p, tmds_clk_n)
+	}
 }
 
 
 case class TMDS_encoder() extends BlackBox{
-        val clk = in Bool()
-        val VD = in Bits(8 bits)
-        val CD = in Bits(2 bits)
-        val VDE = in Bool()
+	val clk = in Bool()
+	val VD = in Bits(8 bits)
+	val CD = in Bits(2 bits)
+	val VDE = in Bool()
 	val TMDS = out Bits(10 bits)
 }
+
+
+case class OBUFDS() extends BlackBox{
+	val I = in Bool()
+	val O, OB = out Bool()
+}
+
+
+case class DCCA() extends BlackBox{
+  val CLKI = in  Bool()
+  val CLKO = out  Bool()
+  val CE = in  Bool()
+}
+
 
 /*
 class TMDSEncoder() extends Component {

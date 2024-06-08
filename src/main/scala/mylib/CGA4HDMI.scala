@@ -7,19 +7,6 @@ import spinal.lib.bus.amba3.apb.{Apb3, Apb3Config, Apb3SlaveFactory}
 import spinal.lib.misc.HexTools
 import mylib._
 
-case class OBUFDS() extends BlackBox{
-  val I = in Bool()
-  val O, OB = out Bool()
-}
-
-
-case class DCCA() extends BlackBox{
-  val CLKI = in  Bool()
-  val CLKO = out  Bool()
-  val CE = in  Bool()
-}
-
-
 case class Apb3CGA4HDMICtrl(
       screen_width: Int = 640,
       screen_height: Int = 480,
