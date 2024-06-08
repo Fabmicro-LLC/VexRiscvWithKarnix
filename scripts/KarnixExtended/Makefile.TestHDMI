@@ -1,0 +1,31 @@
+
+
+VERILOG = ../../KarnixTestHDMITopLevel.v ../../src/main/verilog/TMDS_encoder.sv ../../src/main/verilog/OBUFDS.sv
+
+generate:
+	(cd ../..; sbt "runMain mylib.KarnixTestHDMIVerilog")
+
+
+../../KarnixTestHDMITopLevel.v :
+	(cd ../..; sbt "runMain mylib.KarnixTestHDMIVerilog")
+
+
+bin/KarnixTestHDMITopLevel.json : ${VERILOG}
+	mkdir -p bin
+	yosys -v2 -p "synth_ecp5 -abc9 -top KarnixTestHDMITopLevel -json bin/KarnixTestHDMITopLevel.json" ${VERILOG}
+
+bin/KarnixTestHDMITopLevel_25F.config : karnix_cabga256.lpf bin/KarnixTestHDMITopLevel.json
+	nextpnr-ecp5 --seed 1122 --speed 8 --25k --parallel-refine --lpf karnix_cabga256.lpf --placed-svg bin/KarnixTestHDMITopLevel_placed.svg --package CABGA256 --json bin/KarnixTestHDMITopLevel.json --textcfg $@ 
+
+bin/KarnixTestHDMITopLevel_25F.bit : bin/KarnixTestHDMITopLevel_25F.config
+	ecppack --svf bin/KarnixTestHDMITopLevel_25F.svf  bin/KarnixTestHDMITopLevel_25F.config bin/KarnixTestHDMITopLevel_25F.bit
+
+compile : bin/KarnixTestHDMITopLevel_25F.bit
+
+prog_25F : bin/KarnixTestHDMITopLevel_25F.bit
+	ecpprog bin/KarnixTestHDMITopLevel_25F.bit
+
+clean :
+	rm -f bin/* ../../KarnixTestHDMITopLevel* 
+
+
