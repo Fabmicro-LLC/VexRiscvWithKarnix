@@ -50,10 +50,8 @@ case class Apb3CGA4HDMICtrl(
   // Define memory block for CGA framebuffer
   //val fb_mem = Mem(Bits(32 bits), wordCount = (320*240*2) / 32)
   val fb_mem = Mem(Bits(32 bits), wordCount = (320*(240+16)*2) / 32)
-  val fb_access = Bool()
-  fb_access := io.apb.PENABLE && io.apb.PSEL(0) && io.apb.PADDR < 48*1024
-
   // Connect framebuffer to APB3 bus
+  val fb_access = io.apb.PENABLE && io.apb.PSEL(0) && io.apb.PADDR < 48*1024
   when(fb_access) {
     io.apb.PRDATA := fb_mem.readWriteSync(
         address = (io.apb.PADDR >> 2).resized,
@@ -65,16 +63,15 @@ case class Apb3CGA4HDMICtrl(
     io.apb.PREADY := RegNext(fb_access)
   }
 
-  /*
-
-  // Sync edition of CharGen - uses BRAM
 
   // Define memory block for character generator
-  val chargen_mem = Mem(Bits(8 bits), wordCount = 256 ) // font8x16 x 256
-  var chargen_access = Bool()
-  chargen_access := io.apb.PENABLE && io.apb.PSEL(0) && 
-                  ((io.apb.PADDR & U"xf000") === U"xf000") // 60 * 1024
+  val chargen_mem = Mem(Bits(8 bits), wordCount = 16*256 ) // font8x16 x 256
+  HexTools.initRam(chargen_mem, charGenHexFile, 0x0l)
 
+  /*
+  // Sync edition of CharGen - uses BRAM
+  var chargen_access = io.apb.PENABLE && io.apb.PSEL(0) && 
+                  ((io.apb.PADDR & U"xf000") === U"xf000") // 60 * 1024
   when(chargen_access) {
     io.apb.PRDATA := fb_mem.readWriteSync(
         address = (io.apb.PADDR >> 2).resized,
@@ -87,11 +84,8 @@ case class Apb3CGA4HDMICtrl(
   }
   */
 
-  // Async edition of CharGen - uses COMBs and FFs 
-
-  val chargen_mem = Mem(Bits(8 bits), wordCount = 16*256 ) // font8x16 x 256
-  HexTools.initRam(chargen_mem, charGenHexFile, 0x0l)
-
+ /*
+  // Async edition of CharGen - uses too much COMBs and FFs 
   when( io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xf000") === U"xf000")) { // 61440
     when(io.apb.PWRITE) {
       chargen_mem((io.apb.PADDR & 0x0fff).resized) := io.apb.PWDATA(7 downto 0)
@@ -100,9 +94,13 @@ case class Apb3CGA4HDMICtrl(
     }
     io.apb.PREADY := True
   }
+  */
   
 
+  // Connect palette to APB3 bus
+  //
   val palette_mem = Mem(Bits(32 bits), wordCount = 16) // Pallete registers buffered
+  /*
   when( io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xffc0") === U"xc000")) { // offset 49152
     when(io.apb.PWRITE) {
       palette_mem((io.apb.PADDR >> 2)(3 downto 0)) := io.apb.PWDATA(31 downto 0)
@@ -110,6 +108,18 @@ case class Apb3CGA4HDMICtrl(
       io.apb.PRDATA := palette_mem((io.apb.PADDR >> 2)(3 downto 0)).resized
     }
     io.apb.PREADY := True
+  }
+  */
+  val palette_access = io.apb.PENABLE && io.apb.PSEL(0) && ((io.apb.PADDR & U"xffc0") === U"xc000") // 49152 
+  when(palette_access) {
+    io.apb.PRDATA := palette_mem.readWriteSync(
+        address = (io.apb.PADDR >> 2).resized,
+        data  = io.apb.PWDATA.resized,
+        enable  = palette_access,
+        write  = io.apb.PWRITE,
+        mask  = 3 
+    )
+    io.apb.PREADY := RegNext(palette_access)
   }
 
   val pixclk25_in = Bool()
@@ -309,6 +319,8 @@ case class Apb3CGA4HDMICtrl(
       clk25_div := 0
     }
 
+    pixclk25_in := clk25 
+
     TMDS_shift_red := TMDS_shift_load ? BufferCC(cga.TMDS_red) | TMDS_shift_red(9 downto 1).resized
     TMDS_shift_green := TMDS_shift_load ? BufferCC(cga.TMDS_green) | TMDS_shift_green(9 downto 1).resized
     TMDS_shift_blue := TMDS_shift_load ? BufferCC(cga.TMDS_blue) | TMDS_shift_blue(9 downto 1).resized
@@ -332,7 +344,7 @@ case class Apb3CGA4HDMICtrl(
 
   }
 
-  pixclk25_in := hdmi.clk25
+  //pixclk25_in := hdmi.clk25
 }
 
 

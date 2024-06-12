@@ -8,15 +8,15 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
-import spinal.lib.com.jtag.Jtag
-import spinal.lib.com.jtag.sim.JtagTcp
+//import spinal.lib.com.jtag.Jtag
+//import spinal.lib.com.jtag.sim.JtagTcp
 import spinal.lib.com.uart.sim.{UartDecoder, UartEncoder}
 import spinal.lib.com.uart._
 import spinal.lib.com.spi._
 import spinal.lib.com.eth._
 import spinal.lib.io.TriStateArray
 import spinal.lib.misc.HexTools
-import spinal.lib.system.debugger.{JtagAxi4SharedDebugger, JtagBridge, SystemDebugger, SystemDebuggerConfig}
+//import spinal.lib.system.debugger.{JtagAxi4SharedDebugger, JtagBridge, SystemDebugger, SystemDebuggerConfig}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
@@ -43,7 +43,8 @@ case class BrieyForKarnixConfig(
                        macConfig : MacEthParameter,
                        uart0CtrlConfig : UartCtrlMemoryMappedConfig,
                        uart1CtrlConfig : UartCtrlMemoryMappedConfig,
-                       spiAudioDACCtrlConfig   : SpiMasterCtrlMemoryMappedConfig
+                       spiAudioDACCtrlConfig   : SpiMasterCtrlMemoryMappedConfig,
+                       spi0Config  : SpiMasterCtrlMemoryMappedConfig
 )
 
 object BrieyForKarnixConfig{
@@ -51,7 +52,7 @@ object BrieyForKarnixConfig{
   def default = {
     val config = BrieyForKarnixConfig(
       axiFrequency = 25 MHz,
-      onChipRamSize = 74 kB,
+      onChipRamSize = 72 kB,
       onChipRamHexFile = null,
 
       macConfig = MacEthParameter(
@@ -117,6 +118,16 @@ object BrieyForKarnixConfig{
         rspFifoDepth = 256  // RSP is same as RX FIFO
       ),
 
+      spi0Config = SpiMasterCtrlMemoryMappedConfig(
+        ctrlGenerics = SpiMasterCtrlGenerics(
+          dataWidth      = 16, // transmit 16 bit words
+          timerWidth     = 16,
+          ssWidth        = 1 // only one CS line
+        ),
+        cmdFifoDepth = 16, // CMD is same as TX FIFO
+        rspFifoDepth = 16  // RSP is same as RX FIFO
+      ),
+
       cpuPlugins = ArrayBuffer(
         //new PcManagerSimplePlugin(0x80000000l, false),
         //          new IBusSimplePlugin(
@@ -140,11 +151,11 @@ object BrieyForKarnixConfig{
             asyncTagMemory = false,
             twoCycleRam = true,
             twoCycleCache = true
-          )
+          ),
           //            askMemoryTranslation = true,
-          //            memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
-          //              portTlbSize = 4
-          //            )
+          memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
+            portTlbSize = 4
+          )
         ),
         //                    new DBusSimplePlugin(
         //                      catchAddressMisaligned = true,
@@ -158,14 +169,15 @@ object BrieyForKarnixConfig{
             addressWidth      = 32,
             cpuDataWidth      = 32,
             memDataWidth      = 32,
+            withAmo           = true,
             catchAccessError  = false,
             catchIllegal      = false,
             catchUnaligned    = true
           ),
-          memoryTranslatorPortConfig = null
-          //            memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
-          //              portTlbSize = 6
-          //            )
+          //memoryTranslatorPortConfig = null
+          memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
+            portTlbSize = 6
+          )
         ),
         new StaticMemoryTranslatorPlugin(
           ioRange      = _(31 downto 28) === 0xF
@@ -174,7 +186,7 @@ object BrieyForKarnixConfig{
           catchIllegalInstruction = true
         ),
         new RegFilePlugin(
-          regFileReadyKind = plugin.ASYNC,
+          regFileReadyKind = plugin.SYNC,
           zeroBoot = false
         ),
         new IntAluPlugin,
@@ -242,14 +254,13 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
   }
 
   import config._
-  val debug = true
   val io = new Bundle {
     //Clocks / reset
     val asyncReset = in Bool()
     val mainClk = in Bool()
 
     //Main components IO
-    val jtag = slave(Jtag())
+    //val jtag = slave(Jtag())
 
     //Peripherals IO
     val gpioA = master(TriStateArray(32 bits))
@@ -257,6 +268,7 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     val uart0 = master(Uart(config.uart0CtrlConfig.uartCtrlConfig))
     val uart1 = master(Uart(config.uart1CtrlConfig.uartCtrlConfig))
     val spiAudioDAC = master(SpiMaster(ssWidth = config.spiAudioDACCtrlConfig.ctrlGenerics.ssWidth))
+    val spi0 = master(SpiMaster(ssWidth = config.spi0Config.ctrlGenerics.ssWidth))
     val pwm = out Bool()
     //val hub = out Bits(16 bits)
     val mii = master(Mii(MiiParameter(MiiTxParameter(dataWidth = config.macConfig.phy.txDataWidth, withEr = false), MiiRxParameter( dataWidth = config.macConfig.phy.rxDataWidth))))
@@ -300,11 +312,13 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     frequency = FixedFrequency(axiFrequency) //The frequency information is used by the SDRAM controller
   )
 
+  /*
   val debugClockDomain = ClockDomain(
     clock = io.mainClk,
     reset = resetCtrl.systemReset,
     frequency = FixedFrequency(axiFrequency)
   )
+  */
 
   val axi = new ClockingArea(axiClockDomain) {
     val ram = Axi4SharedOnChipRam(
@@ -377,6 +391,10 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     spiAudioDACCtrl.io.spi <> io.spiAudioDAC
     plic.setIRQ(spiAudioDACCtrl.io.interrupt, 6)
 
+    val spi0Ctrl = new Apb3SpiMasterCtrl(spi0Config)
+    spi0Ctrl.io.spi <> io.spi0
+    plic.setIRQ(spi0Ctrl.io.interrupt, 8)
+
     val pwmCtrl = new Apb3PwmCtrl(size = 32)
     io.pwm := pwmCtrl.io.output
 
@@ -395,7 +413,7 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
 
     val core = new Area{
       val config = VexRiscvConfig(
-        plugins = cpuPlugins += new DebugPlugin(debugClockDomain)
+        plugins = cpuPlugins// += new DebugPlugin(debugClockDomain)
       )
 
       val cpu = new VexRiscv(config)
@@ -410,10 +428,12 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
           plugin.externalInterrupt := plic.io.externalInterrupt
           plugin.timerInterrupt := sysTimerCtrl.io.interrupt
         }
+        /*
         case plugin : DebugPlugin      => debugClockDomain{
           resetCtrl.axiReset setWhen(RegNext(plugin.io.resetOut))
           io.jtag <> plugin.io.bus.fromJtag()
         }
+        */
         case _ =>
       }
     }
@@ -482,7 +502,8 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
         i2cCtrl.io.apb -> (0x90000, 64 kB),
         wdCtrl.io.apb -> (0xA0000, 4 kB),
         machineTimer.io.apb -> (0xB0000, 4 kB),
-        spiAudioDACCtrl.io.apb -> (0xC0000, 4 kB)
+        spiAudioDACCtrl.io.apb -> (0xC0000, 4 kB),
+        spi0Ctrl.io.apb -> (0xC1000, 4 kB)
       )
     )
   }
@@ -529,19 +550,22 @@ case class BrieyForKarnixTopLevel() extends Component{
 
         val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
         val spiAudioDAC = master(SpiMaster(ssWidth = 1))
+        val spi0 = master(SpiMaster(ssWidth = 1))
         
 	val config = in Bool() // Config reset pin
 
+        /*
 	var core_jtag_tck = in Bool()
 	var core_jtag_tdi = in Bool()
 	var core_jtag_tdo = out Bool()
 	var core_jtag_tms = in Bool()
+        */
 
         val hdmi = master(HDMIInterface())
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 60.0 MHz, 
+		axiFrequency = 59.0 MHz, 
 		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
@@ -642,10 +666,12 @@ case class BrieyForKarnixTopLevel() extends Component{
     briey.io.jtag.tdo <> io.core_jtag_tdo
     briey.io.jtag.tms <> io.core_jtag_tms
     */
+    /*
     briey.io.jtag.tdi := False
     briey.io.jtag.tck := False
     briey.io.jtag.tms := False
     io.core_jtag_tdo := False
+    */
 
     io.led := briey.io.gpioA.write.resized
 
@@ -667,6 +693,7 @@ case class BrieyForKarnixTopLevel() extends Component{
 
     briey.io.sram <> io.sram
     briey.io.spiAudioDAC <> io.spiAudioDAC
+    briey.io.spi0 <> io.spi0
 
     io.i2c_scl <> briey.io.i2c.scl
     io.i2c_sda <> briey.io.i2c.sda
