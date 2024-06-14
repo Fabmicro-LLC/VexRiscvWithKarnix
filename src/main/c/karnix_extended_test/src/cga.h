@@ -23,8 +23,23 @@ extern const char font_12x16[];
 #define	CGA_CTRL_VSYNC_FLAG		(1 << 20)	
 #define	CGA_CTRL_VBLANK_FLAG		(1 << 19)	
 #define	CGA_CTRL_V_SCROLL_DIR		(1 << 10)	
-#define	CGA_CTRL_V_SCROLL_SHIFT		0	
+#define	CGA_CTRL_V_SCROLL_SHIFT		0
 #define	CGA_CTRL_V_SCROLL		(0x03ff << CGA_CTRL_V_SCROLL_SHIFT)
+
+#define	CGA_CTRL2_CURSOR_X_SHIFT	0
+#define	CGA_CTRL2_CURSOR_X		(0xff << CGA_CTRL2_CURSOR_X_SHIFT)
+#define	CGA_CTRL2_CURSOR_Y_SHIFT	8
+#define	CGA_CTRL2_CURSOR_Y		(0xff << CGA_CTRL2_CURSOR_Y_SHIFT)
+#define	CGA_CTRL2_CURSOR_BOTTOM_SHIFT	14
+#define	CGA_CTRL2_CURSOR_BOTTOM		(0x0f << CGA_CTRL2_CURSOR_BOTTOM_SHIFT)
+#define	CGA_CTRL2_CURSOR_TOP_SHIFT	16
+#define	CGA_CTRL2_CURSOR_TOP		(0x0f << CGA_CTRL2_CURSOR_TOP_SHIFT)
+#define	CGA_CTRL2_CURSOR_BLINK_SHIFT	24
+#define	CGA_CTRL2_CURSOR_BLINK		(0x07 << CGA_CTRL2_CURSOR_BLINK_SHIFT)
+#define	CGA_CTRL2_CURSOR_BLINK_EN_SHIFT	27
+#define	CGA_CTRL2_CURSOR_BLINK_EN	(1 << CGA_CTRL2_CURSOR_BLINK_EN_SHIFT)
+#define	CGA_CTRL2_CURSOR_COLOR_SHIFT	28
+#define	CGA_CTRL2_CURSOR_COLOR		(0x0f << CGA_CTRL2_CURSOR_COLOR_SHIFT)
 
 #define	CGA_MODE_TEXT		0
 #define	CGA_MODE_GRAPHICS1	1
@@ -35,15 +50,16 @@ typedef struct
   uint8_t FB[CGA_FRAMEBUFFER_SIZE];			// Framebuffer
   uint8_t unused1[48*1024-CGA_FRAMEBUFFER_SIZE];	//  
   volatile uint32_t PALETTE[16];				// offset 48K
-  volatile uint32_t CTRL;				// 48K + 16 
-  uint8_t unused2[12204];				// 
+  volatile uint32_t CTRL;				// 48K + 64 
+  volatile uint32_t CTRL2;				// 48K + 128 
+  uint8_t unused2[12200];				// 
   uint8_t CHARGEN[4096];				// offset 60K
 } CGA_Reg;
 #pragma pack(0)
 
 int cga_ram_test(int interations);
 
-void cga_set_palette(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3);
+void cga_set_palette(uint32_t c[16]);
 
 void cga_video_print(int x, int y, int colors, char *text, int text_size, const char *font,
 		int font_width, int font_height);

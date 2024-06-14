@@ -3,11 +3,8 @@
 #include "utils.h"
 #include <string.h>
 
-void cga_set_palette(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3) {
-	CGA->PALETTE[0] = c0;
-	CGA->PALETTE[1] = c1;
-	CGA->PALETTE[2] = c2;
-	CGA->PALETTE[3] = c3;
+void cga_set_palette(uint32_t c[16]) {
+	memcpy((void *)CGA->PALETTE, c, 16 * 4);
 }
 
 void cga_rotate_palette_left(uint32_t palettes_to_rotate) {

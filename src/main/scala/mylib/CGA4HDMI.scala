@@ -47,6 +47,15 @@ case class Apb3CGA4HDMICtrl(
   val scroll_v_dir = cgaCtrlWord(10).addTag(crossClockDomain) 
   val scroll_v = cgaCtrlWord(9 downto 0).asUInt.addTag(crossClockDomain) 
 
+  val cgaCtrl2Word = busCtrl.createReadAndWrite(Bits(32 bits), address = 48*1024+68) init(B"32'xfc0f0000")
+  val cursor_x = cgaCtrl2Word(6 downto 0).asUInt.addTag(crossClockDomain)
+  val cursor_y = cgaCtrl2Word(13 downto 8).asUInt.addTag(crossClockDomain)
+  val cursor_bottom = cgaCtrl2Word(19 downto 16).asUInt.addTag(crossClockDomain)
+  val cursor_top = cgaCtrl2Word(23 downto 20).asUInt.addTag(crossClockDomain)
+  val cursor_blink = cgaCtrl2Word(26 downto 24).asUInt.addTag(crossClockDomain)
+  val cursor_blink_enabled = cgaCtrl2Word(27).addTag(crossClockDomain)
+  val cursor_color = cgaCtrl2Word(31 downto 28).asUInt.addTag(crossClockDomain)
+
   // Define memory block for CGA framebuffer
   //val fb_mem = Mem(Bits(32 bits), wordCount = (320*240*2) / 32)
   val fb_mem = Mem(Bits(32 bits), wordCount = (320*(240+16)*2) / 32)
@@ -170,17 +179,22 @@ case class Apb3CGA4HDMICtrl(
     encoder_B.VDE := DE
     TMDS_blue := encoder_B.TMDS
 
-    val CounterX = Reg(UInt(10 bits))
-    val CounterY = Reg(UInt(10 bits))
+    val CounterX = Reg(UInt(10 bits)) // CRT ray X position
+    val CounterY = Reg(UInt(10 bits)) // CRT ray Y position
+    val CounterF = Reg(UInt(7 bits)) // Frame counter, used for cursor blink feature
 
     DE := (CounterX >= U(32) && CounterX < U(672)) &&
           (CounterY >= 16 && CounterY < 480+16) &&
           video_enabled
 
-    CounterX := (CounterX === U(799)) ? U(0) | CounterX + 1
+    CounterX := (CounterX === 799) ? U(0) | CounterX + 1
 
-    when(CounterX === U(799)) {
+    when(CounterX === 799) {
       CounterY := ((CounterY === 524) ? U(0) | CounterY + 1)
+    }
+
+    when(CounterX === 0 && CounterY === 0) {
+      CounterF := CounterF + 1
     }
 
     hSync := (CounterX >= U(704)) && (CounterX < U(752))
@@ -195,8 +209,7 @@ case class Apb3CGA4HDMICtrl(
     word_load := False
     word_address := 0
 
-    
-    // 32 bit word of char data
+    // 32 bit word of current character data
     word := fb_mem.readSync(address = word_address, enable = word_load, clockCrossing = true)
 
     val CounterY_ = (scroll_v_dir ? (CounterY - scroll_v) | (CounterY + scroll_v))
@@ -230,15 +243,38 @@ case class Apb3CGA4HDMICtrl(
 
         when(DE && blanking_not_enabled) {
 
-          when((char_data & char_mask) =/= 0) {
+          var x = (CounterX - 32)(9 downto 3) // current ray column position
+          var y = (CounterY_ - 16)(9 downto 4) // current ray raw position
+          var blink_flag = CounterF(cursor_blink) && cursor_blink_enabled
+
+          when(x === cursor_x && y === cursor_y && blink_flag) {
+            // Implement blinking cursor
+            red := palette_mem(cursor_color).asBits(7 downto 0)
+            green := palette_mem(cursor_color).asBits(15 downto 8)
+            blue := palette_mem(cursor_color).asBits(23 downto 16)
+          } elsewhen((char_data & char_mask) =/= 0) {
+            // Draw character
             red := palette_mem(char_fg_color).asBits(7 downto 0)
             green := palette_mem(char_fg_color).asBits(15 downto 8)
             blue := palette_mem(char_fg_color).asBits(23 downto 16)
           } otherwise {
+            // Draw background
             red := palette_mem(char_bg_color).asBits(7 downto 0)
             green := palette_mem(char_bg_color).asBits(15 downto 8)
             blue := palette_mem(char_bg_color).asBits(23 downto 16)
           }
+
+          /*
+          // Implement blinking cursor
+          var x = (CounterX - 32)(9 downto 3)
+          var y = (CounterY_ - 16)(9 downto 4)
+
+          when(x === cursor_x && y === cursor_y && CounterF(4)) {
+            red := 255
+            green := 255
+            blue := 255 
+          }
+          */
 
         } otherwise {
           red := 0

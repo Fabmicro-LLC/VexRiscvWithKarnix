@@ -208,7 +208,8 @@ object BrieyForKarnixConfig{
         ),
         new BranchPlugin(
           earlyBranch = false,
-          catchAddressMisaligned = true
+          catchAddressMisaligned = true,
+          fenceiGenAsAJump = false
         ),
         new CsrPlugin(
           config = CsrPluginConfig(

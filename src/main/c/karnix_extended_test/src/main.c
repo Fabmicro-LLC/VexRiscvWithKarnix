@@ -535,7 +535,13 @@ void main() {
 
 	cga_ram_test(1);
 
-	cga_set_palette(0x00000000, 0x000000f0, 0x0000f000, 0x00f00000);
+	uint32_t palette[16] = {
+			0x00000000, 0x000000f0, 0x0000f000, 0x00f00000,
+			0x0000f0f0, 0x00f000f0, 0x00f0f000, 0x00f0f0f0,
+			0x000f0f0f, 0x000f0fff, 0x000fff0f, 0x00ff0f0f,
+			0x000fffff, 0x00ff0fff, 0x00ffff0f, 0x00ffffff,
+			};
+	cga_set_palette(palette);
 
 
 
