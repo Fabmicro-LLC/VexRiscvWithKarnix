@@ -57,15 +57,21 @@ case class KarnixTestHDMITopLevel(
         frequency = FixedFrequency(25.0 MHz)
     )
 
+    val tmdsClockDomain = ClockDomain(
+        clock = pixclk_x10,
+        config = ClockDomainConfig(resetKind = BOOT),
+        frequency = FixedFrequency(250.0 MHz)
+    )
+
     val dvi_area = new ClockingArea(dviClockDomain) {
 
-	/* Define RGBHV and DE regs */
+	/* Define RGB regs, HV and DE signals */
         val red = Bits(8 bits)
         val green = Bits(8 bits)
         val blue = Bits(8 bits)
         val hSync = Bool()
         val vSync = Bool()
-        val vBlank =Bool()
+        val vBlank = Bool()
         val de = Bool()
 
         /* Generate picture using X and Y counters */
@@ -111,11 +117,6 @@ case class KarnixTestHDMITopLevel(
 
 	/* Do TMDS encoding */
 
-	/* Define 10 bit TMDS regs for encoded color and control data */
-        val TMDS_red = Bits(10 bits)
-        val TMDS_green = Bits(10 bits)
-        val TMDS_blue = Bits(10 bits)
-
 	/* Pass each color reg through external TMDS encoder to get TMDS regs filled */
 
         val encoder_R = TMDS_encoder()
@@ -123,21 +124,18 @@ case class KarnixTestHDMITopLevel(
         encoder_R.VD := red
         encoder_R.CD := B"00"
         encoder_R.VDE := de 
-        TMDS_red := encoder_R.TMDS
 
         val encoder_G = TMDS_encoder()
         encoder_G.clk := pixclk
         encoder_G.VD := green
         encoder_G.CD := B"00"
         encoder_G.VDE := de 
-        TMDS_green := encoder_G.TMDS
 
         val encoder_B = TMDS_encoder()
         encoder_B.clk := pixclk
         encoder_B.VD := blue
         encoder_B.CD := vSync ## hSync /* Blue channel carries HSYNC and VSYNC controls */
         encoder_B.VDE := de 
-        TMDS_blue := encoder_B.TMDS
 
         /* Produce TMDS clock differential signal which is PIXCLK, i.e. 25.0 MHz, not 250.0 MHz !!! */
         val tmds_clk = OBUFDS()
@@ -146,12 +144,6 @@ case class KarnixTestHDMITopLevel(
         io.hdmi.tmds_clk_n := tmds_clk.OB
 
     }
-
-    val tmdsClockDomain = ClockDomain(
-        clock = pixclk_x10,
-        config = ClockDomainConfig(resetKind = BOOT),
-        frequency = FixedFrequency(250.0 MHz)
-    )
 
     val tmds_area = new ClockingArea(tmdsClockDomain) {
 
@@ -182,9 +174,9 @@ case class KarnixTestHDMITopLevel(
         val TMDS_mod10 = Reg(UInt(4 bits)) init(0)
         val TMDS_shift_load = Reg(Bool()) init(False)
 
-        TMDS_shift_red := TMDS_shift_load ? BufferCC(dvi_area.TMDS_red) | TMDS_shift_red(9 downto 1).resized
-        TMDS_shift_green := TMDS_shift_load ? BufferCC(dvi_area.TMDS_green) | TMDS_shift_green(9 downto 1).resized
-        TMDS_shift_blue := TMDS_shift_load ? BufferCC(dvi_area.TMDS_blue) | TMDS_shift_blue(9 downto 1).resized
+        TMDS_shift_red := TMDS_shift_load ? BufferCC(dvi_area.encoder_R.TMDS) | TMDS_shift_red(9 downto 1).resized
+        TMDS_shift_green := TMDS_shift_load ? BufferCC(dvi_area.encoder_G.TMDS) | TMDS_shift_green(9 downto 1).resized
+        TMDS_shift_blue := TMDS_shift_load ? BufferCC(dvi_area.encoder_B.TMDS) | TMDS_shift_blue(9 downto 1).resized
         TMDS_mod10 := ((TMDS_mod10 === U(9)) ? U(0) | TMDS_mod10 + 1)
         TMDS_shift_load := TMDS_mod10 === U(9)
 
