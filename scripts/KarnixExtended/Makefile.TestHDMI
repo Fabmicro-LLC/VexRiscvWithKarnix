@@ -22,8 +22,9 @@ bin/KarnixTestHDMITopLevel_25F.bit : bin/KarnixTestHDMITopLevel_25F.config
 
 compile : bin/KarnixTestHDMITopLevel_25F.bit
 
-prog_25F : bin/KarnixTestHDMITopLevel_25F.bit
-	ecpprog bin/KarnixTestHDMITopLevel_25F.bit
+prog : bin/KarnixTestHDMITopLevel_25F.bit
+	openFPGALoader -f bin/KarnixTestHDMITopLevel_25F.bit
+	#ecpprog bin/KarnixTestHDMITopLevel_25F.bit
 
 clean :
 	rm -f bin/* ../../KarnixTestHDMITopLevel* 
