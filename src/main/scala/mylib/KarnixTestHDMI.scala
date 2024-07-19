@@ -21,8 +21,8 @@ case class KarnixTestHDMITopLevel(
         val hdmi = master(HDMIInterface())
     }
 
-    val pixclk_in = Bool() /* Articially synthesized clock */
-    val pixclk = Bool() /* Articially synthesized clock globally routed (ECP5 specific) */
+    val pixclk_in = Bool() /* Artificially synthesized clock */
+    val pixclk = Bool() /* Artificially synthesized clock globally routed (ECP5 specific) */
     val pixclk_x10 = Bool() /* x10 multiplied clock */  
 
     /* Route artificial TMDS clock using global lines, i.e. DCCA (ECP5 specific) */
