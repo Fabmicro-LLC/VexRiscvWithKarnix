@@ -153,7 +153,8 @@ object BrieyForKarnixConfig{
             twoCycleCache = true
           ),
           //            askMemoryTranslation = true,
-          memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
+          //memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
+          memoryTranslatorPortConfig = MmuPortConfig(
             portTlbSize = 4
           )
         ),
@@ -170,23 +171,28 @@ object BrieyForKarnixConfig{
             cpuDataWidth      = 32,
             memDataWidth      = 32,
             withAmo           = true,
-            catchAccessError  = false,
-            catchIllegal      = false,
-            catchUnaligned    = true
+            withLrSc          = true,
+            catchAccessError  = true,
+            catchIllegal      = true,
+            catchUnaligned    = true 
           ),
           //memoryTranslatorPortConfig = null
-          memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
+          //memoryTranslatorPortConfig = MemoryTranslatorPortConfig(
+          memoryTranslatorPortConfig = MmuPortConfig(
             portTlbSize = 6
           )
         ),
-        new StaticMemoryTranslatorPlugin(
+        new MmuPlugin(
           ioRange      = _(31 downto 28) === 0xF
         ),
+        //new StaticMemoryTranslatorPlugin(
+        //  ioRange      = _(31 downto 28) === 0xF
+        //),
         new DecoderSimplePlugin(
           catchIllegalInstruction = true
         ),
         new RegFilePlugin(
-          regFileReadyKind = plugin.SYNC,
+          regFileReadyKind = plugin.ASYNC,
           zeroBoot = false
         ),
         new IntAluPlugin,
@@ -219,8 +225,10 @@ object BrieyForKarnixConfig{
             mimpid         = null,
             mhartid        = null,
             misaExtensionsInit = 66,
-            misaAccess     = CsrAccess.NONE,
-            mtvecAccess    = CsrAccess.NONE,
+            //misaAccess     = CsrAccess.NONE,
+            misaAccess     = CsrAccess.READ_ONLY,
+            //mtvecAccess    = CsrAccess.NONE,
+            mtvecAccess    = CsrAccess.WRITE_ONLY,
             mtvecInit      = 0x80000020l,
             mepcAccess     = CsrAccess.READ_WRITE,
             mscratchGen    = false,
@@ -228,7 +236,8 @@ object BrieyForKarnixConfig{
             mbadaddrAccess = CsrAccess.READ_ONLY,
             mcycleAccess   = CsrAccess.NONE,
             minstretAccess = CsrAccess.NONE,
-            ecallGen       = false,
+            ecallGen       = true,
+            ebreakGen      = true,
             wfiGenAsWait   = false,
             ucycleAccess   = CsrAccess.NONE,
             uinstretAccess = CsrAccess.NONE
@@ -566,7 +575,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 59.0 MHz, 
+		axiFrequency = 60.0 MHz, 
 		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
