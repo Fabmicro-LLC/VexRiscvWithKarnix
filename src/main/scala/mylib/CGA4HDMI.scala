@@ -8,17 +8,15 @@ import spinal.lib.misc.HexTools
 import mylib._
 
 case class Apb3CGA4HDMICtrl(
-      screen_width: Int = 640,
-      screen_height: Int = 480,
-      frame_width: Int = 800,
-      frame_height: Int = 525,
-      hsync_start: Int = 16,
-      hsync_size: Int = 96,
-      vsync_start: Int = 10,
-      vsync_size: Int = 2,
-      hsync_pol: Int = 1,
-      vsync_pol: Int = 1,
-      charGenHexFile: String = "font8x16x256.hex"
+	horiz_back_porch: Int = 32,
+	horiz_active: Int = 640,
+	horiz_front_porch: Int = 32,
+	horiz_sync: Int = 96,
+	vert_back_porch: Int = 16,
+	vert_active: Int = 480,
+	vert_front_porch: Int = 27,
+	vert_sync: Int = 2,
+	charGenHexFile: String = "font8x16x256.hex"
       ) extends Component {
   val io = new Bundle {
     val apb              = slave(Apb3(addressWidth = 16, dataWidth = 32))
@@ -40,7 +38,7 @@ case class Apb3CGA4HDMICtrl(
    *              19    - VBLANK status
    */
 
-  val cgaCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 48*1024+64) init(B"10000000000000000000000000000000")
+  val cgaCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 48*1024+64) init(B"32'x80000000")
   val video_enabled = cgaCtrlWord(31).addTag(crossClockDomain) 
   val blanking_enabled = cgaCtrlWord(30).addTag(crossClockDomain) 
   val video_mode = cgaCtrlWord(25 downto 24).addTag(crossClockDomain)
@@ -131,75 +129,78 @@ case class Apb3CGA4HDMICtrl(
     io.apb.PREADY := RegNext(palette_access)
   }
 
-  val pixclk25_in = Bool()
-  val pixclk25 = Bool()
+  val pixclk_in = Bool() /* Artificially synthesized clock */
+  val pixclk = Bool() /* Artificially synthesized clock globally routed (ECP5 specific) */
+  val pixclk_x10 = Bool() /* x10 multiplied clock */
 
+  /* Route artificial TMDS clock using global lines, i.e. DCCA (ECP5 specific) */
   val dcca = new DCCA()
-  dcca.CLKI := pixclk25_in
+  dcca.CLKI := pixclk_in
   dcca.CE := True
-  pixclk25 := dcca.CLKO
+  pixclk := dcca.CLKO
 
-  val cgaClockDomain = ClockDomain(
-    clock = pixclk25,
+  val dviClockDomain = ClockDomain(
+    clock = pixclk,
     config = ClockDomainConfig(resetKind = BOOT),
     frequency = FixedFrequency(25.0 MHz)
   )
 
-  val cga = new ClockingArea(cgaClockDomain) {
+  val tmdsClockDomain = ClockDomain(
+    clock = io.pixclk_x10,
+    config = ClockDomainConfig(resetKind = BOOT),
+    frequency = FixedFrequency(250.0 MHz)
+  )
 
-    val TMDS_red = Bits(10 bits)
-    val TMDS_green = Bits(10 bits)
-    val TMDS_blue = Bits(10 bits)
+  val dvi_area = new ClockingArea(dviClockDomain) {
+
+    /* Define RGB regs, HV and DE signals */
     val red = Bits(8 bits)
     val green = Bits(8 bits)
     val blue = Bits(8 bits)
     val hSync = Bool()
     val vSync = Bool()
-    val vBlank =Bool()
-    val DE = Bool()
+    val vBlank = Bool()
+    val de = Bool()
 
-    val encoder_R = TMDS_encoder()
-    encoder_R.clk := pixclk25
-    encoder_R.VD := red
-    encoder_R.CD := B"00"
-    encoder_R.VDE := DE
-    TMDS_red := encoder_R.TMDS
+    /* Generate counters */
 
-    val encoder_G = TMDS_encoder()
-    encoder_G.clk := pixclk25
-    encoder_G.VD := green 
-    encoder_G.CD := B"00"
-    encoder_G.VDE := DE
-    TMDS_green := encoder_G.TMDS
+    /* Convenience params */
+    val horiz_total_width = horiz_back_porch + horiz_active + horiz_front_porch + horiz_sync
+    val vert_total_height = vert_back_porch + vert_active + vert_front_porch + vert_sync
 
-    val encoder_B = TMDS_encoder()
-    encoder_B.clk := pixclk25
-    encoder_B.VD := blue 
-    encoder_B.CD := vSync ## hSync 
-    encoder_B.VDE := DE
-    TMDS_blue := encoder_B.TMDS
-
-    val CounterX = Reg(UInt(10 bits)) // CRT ray X position
-    val CounterY = Reg(UInt(10 bits)) // CRT ray Y position
+    /* Set of counters */
+    val CounterX = Reg(UInt(log2Up(horiz_total_width) bits))
+    val CounterY = Reg(UInt(log2Up(vert_total_height) bits))
+    //val CounterY_ = (scroll_v_dir ? (CounterY - scroll_v) | (CounterY + scroll_v))
+    val CounterY_ = (scroll_v_dir ? (CounterY - BufferCC(scroll_v)) | (CounterY + BufferCC(scroll_v)))
     val CounterF = Reg(UInt(7 bits)) // Frame counter, used for cursor blink feature
 
-    DE := (CounterX >= U(32) && CounterX < U(672)) &&
-          (CounterY >= 16 && CounterY < 480+16) &&
-          video_enabled
 
-    CounterX := (CounterX === 799) ? U(0) | CounterX + 1
+    CounterX := (CounterX === horiz_total_width - 1) ? U(0) | CounterX + 1
 
-    when(CounterX === 799) {
-      CounterY := ((CounterY === 524) ? U(0) | CounterY + 1)
+    when(CounterX === horiz_total_width - 1) {
+        CounterY := ((CounterY === vert_total_height - 1) ? U(0) | CounterY + 1)
     }
 
     when(CounterX === 0 && CounterY === 0) {
       CounterF := CounterF + 1
     }
 
-    hSync := (CounterX >= U(704)) && (CounterX < U(752))
-    vSync := (CounterY >= 490+16) && (CounterY < 492+16)
-    vBlank := (CounterY < 16) || (CounterY >= 480+16)
+
+    /* Produce HSYNC, VSYNC and DE based on back/front porches */
+    hSync := (CounterX >= horiz_back_porch + horiz_active + horiz_front_porch) &&
+             (CounterX < horiz_back_porch + horiz_active + horiz_front_porch + horiz_sync)
+
+    vSync := (CounterY >= vert_back_porch + vert_active + vert_front_porch) &&
+             (CounterY < vert_back_porch + vert_active + vert_front_porch + vert_sync)
+
+    de := (CounterX >= horiz_back_porch && CounterX < horiz_back_porch + horiz_active) &&
+          (CounterY >= vert_back_porch && CounterY < vert_back_porch + vert_active)
+
+    vBlank := (CounterY < vert_back_porch) || (CounterY >= vert_active + vert_back_porch)
+
+
+    /* Generate display picture */
 
     val blanking_not_enabled = !blanking_enabled
     val word_load = Bool()
@@ -209,22 +210,20 @@ case class Apb3CGA4HDMICtrl(
     word_load := False
     word_address := 0
 
-    // 32 bit word of current character data
+    // 32 bit word of current character/PEL data
     word := fb_mem.readSync(address = word_address, enable = word_load, clockCrossing = true)
-
-    val CounterY_ = (scroll_v_dir ? (CounterY - scroll_v) | (CounterY + scroll_v))
-    //val CounterY_ = (scroll_v_dir ? (CounterY - BufferCC(scroll_v)) | (CounterY + BufferCC(scroll_v)))
     
     switch(video_mode) {
 
-      is(B"00") { // Tex mode: 80x30 characters each 8x16 pixels
-
+      is(B"00") { // Text mode: 80x30 characters each 8x16 pixels
 
         // Load flag active on each 6th and 7th pixel
-        word_load := (CounterX >= U(32 - 8) && CounterX < U(672)) && (CounterY_ < 480+16+16) && ((CounterX & U(6)) === U(6))
+        word_load := (CounterX >= U(horiz_back_porch - 8) && CounterX < U(horiz_back_porch + horiz_active)) &&
+                     (CounterY_ < vert_back_porch + vert_active + 16) && ((CounterX & U(6)) === U(6))
 
-        // Index of the 32 bit word in framebufffer memory: addr = (y / 16) * 80 + x/8
-        word_address := ((CounterY_ - 16)(9 downto 4) * 80 + (CounterX - (32 - 8))(9 downto 3)).resized
+        // Index of the 32 bit word in framebuffer memory: addr = (y / 16) * 80 + x/8
+        word_address := ((CounterY_ - 16)(9 downto 4) * 80 +
+                         (CounterX - (horiz_back_porch - 8))(9 downto 3)).resized
 
         val char_row = CounterY_(3 downto 0)
         val char_mask = Reg(Bits(8 bits))
@@ -241,10 +240,10 @@ case class Apb3CGA4HDMICtrl(
 
         val char_data = chargen_mem((char_idx ## char_row).asUInt).asBits
 
-        when(DE && blanking_not_enabled) {
+        when(de && blanking_not_enabled) {
 
-          var x = (CounterX - 32)(9 downto 3) // current ray column position
-          var y = (CounterY_ - 16)(9 downto 4) // current ray raw position
+          var x = (CounterX - horiz_back_porch)(9 downto 3) // current ray column position
+          var y = (CounterY_ - vert_back_porch)(9 downto 4) // current ray raw position
           var blink_flag = CounterF(cursor_blink) && cursor_blink_enabled
 
           when(x === cursor_x && y === cursor_y && blink_flag) {
@@ -264,18 +263,6 @@ case class Apb3CGA4HDMICtrl(
             blue := palette_mem(char_bg_color).asBits(23 downto 16)
           }
 
-          /*
-          // Implement blinking cursor
-          var x = (CounterX - 32)(9 downto 3)
-          var y = (CounterY_ - 16)(9 downto 4)
-
-          when(x === cursor_x && y === cursor_y && CounterF(4)) {
-            red := 255
-            green := 255
-            blue := 255 
-          }
-          */
-
         } otherwise {
           red := 0
           green := 0
@@ -283,15 +270,16 @@ case class Apb3CGA4HDMICtrl(
         }
       }
 
-      is(B"01") { // Graphics mode: 320x240, 2 bits per pixel with full color palette
+      is(B"01") { // Graphics mode: 320x240, 2 bits per PEL with full color palette
 
         // Load flag active on each 30 and 31 pixel of 32 bit word
-        word_load := (CounterX >= 0 && CounterX < U(672)) && (CounterY_ < 480+16) && ((CounterX & U(30)) === U(30))
+        word_load := (CounterX >= 0 && CounterX < U(horiz_back_porch + horiz_active)) &&
+                     (CounterY_ < vert_back_porch + vert_active) && ((CounterX & U(30)) === U(30))
 
-        // Index of the 32 bit word in framebufffer memory: addr = y * 20 + x/16
+        // Index of the 32 bit word in framebuffer memory: addr = y/2 * 20 + x/2/16
         word_address := ((CounterY_ - 16)(9 downto 1) * 20 + CounterX(9 downto 5)).resized
 
-        when(DE && blanking_not_enabled) {
+        when(de && blanking_not_enabled) {
 
           val color = UInt(4 bits)
 
@@ -315,53 +303,75 @@ case class Apb3CGA4HDMICtrl(
       }
     }
 
+    /* Do TMDS encoding */
+
+    /* Pass each color reg through external TMDS encoder to get TMDS regs filled */
+
+    val encoder_R = TMDS_encoder()
+    encoder_R.clk := pixclk
+    encoder_R.VD := red
+    encoder_R.CD := B"00"
+    encoder_R.VDE := de
+
+    val encoder_G = TMDS_encoder()
+    encoder_G.clk := pixclk
+    encoder_G.VD := green
+    encoder_G.CD := B"00"
+    encoder_G.VDE := de
+
+    val encoder_B = TMDS_encoder()
+    encoder_B.clk := pixclk
+    encoder_B.VD := blue
+    encoder_B.CD := vSync ## hSync /* Blue channel carries HSYNC and VSYNC controls */
+    encoder_B.VDE := de
+
+    /* Produce TMDS clock differential signal which is PIXCLK, i.e. 25.0 MHz, not 250.0 MHz !!! */
     val tmds_clk = OBUFDS()
-    tmds_clk.I := pixclk25
+    tmds_clk.I := pixclk
     io.hdmi.tmds_clk_p := tmds_clk.O
     io.hdmi.tmds_clk_n := tmds_clk.OB
 
   }
 
-  cgaCtrlWord(21 downto 19) := BufferCC(cga.hSync ## cga.vSync ## cga.vBlank)
+  cgaCtrlWord(21 downto 19) := BufferCC(dvi_area.hSync ## dvi_area.vSync ## dvi_area.vBlank)
   io.vblank_interrupt := cgaCtrlWord(19) 
 
-  val hdmiClockDomain = ClockDomain(
-    clock = io.pixclk_x10,
-    config = ClockDomainConfig(resetKind = BOOT),
-    frequency = FixedFrequency(250.0 MHz)
-  )
+  val tmds_area = new ClockingArea(tmdsClockDomain) {
 
-  val hdmi = new ClockingArea(hdmiClockDomain) {
+    /* Generate 25 MHz PIXCLK by dividing pixclk_x10 by 10 */
 
-    val TMDS_mod10 = Reg(UInt(4 bits)) init(0)
+    val clk_div = Reg(UInt(4 bits)) init(0)
+    val clk = Reg(Bool())
+
+    clk_div := clk_div + 1
+
+    when(clk_div === 4) {
+      clk := True
+    }
+
+    when(clk_div === 9) {
+      clk := False
+      clk_div := 0
+    }
+
+    pixclk_in := clk
+
+    /* Produce G, R and B data bits by shifting each TMDS register.
+       Use BufferCC() to cross clock domains.  */
+
     val TMDS_shift_red = Reg(Bits(10 bits)) init(0)
     val TMDS_shift_green = Reg(Bits(10 bits)) init(0)
     val TMDS_shift_blue = Reg(Bits(10 bits)) init(0)
+    val TMDS_mod10 = Reg(UInt(4 bits)) init(0)
     val TMDS_shift_load = Reg(Bool()) init(False)
 
-
-    // Generate 25 MHz PIXCLK (div by 10)
-    val clk25_div = Reg(UInt(4 bits)) init(0)
-    val clk25 = Reg(Bool())
-
-    clk25_div := clk25_div + 1
-
-    when(clk25_div === 4) {
-      clk25 := True
-    }
-
-    when(clk25_div === 9) {
-      clk25 := False
-      clk25_div := 0
-    }
-
-    pixclk25_in := clk25 
-
-    TMDS_shift_red := TMDS_shift_load ? BufferCC(cga.TMDS_red) | TMDS_shift_red(9 downto 1).resized
-    TMDS_shift_green := TMDS_shift_load ? BufferCC(cga.TMDS_green) | TMDS_shift_green(9 downto 1).resized
-    TMDS_shift_blue := TMDS_shift_load ? BufferCC(cga.TMDS_blue) | TMDS_shift_blue(9 downto 1).resized
+    TMDS_shift_red := TMDS_shift_load ? BufferCC(dvi_area.encoder_R.TMDS) | TMDS_shift_red(9 downto 1).resized
+    TMDS_shift_green := TMDS_shift_load ? BufferCC(dvi_area.encoder_G.TMDS) | TMDS_shift_green(9 downto 1).resized
+    TMDS_shift_blue := TMDS_shift_load ? BufferCC(dvi_area.encoder_B.TMDS) | TMDS_shift_blue(9 downto 1).resized
     TMDS_mod10 := ((TMDS_mod10 === U(9)) ? U(0) | TMDS_mod10 + 1)
     TMDS_shift_load := TMDS_mod10 === U(9)
+
+    /* Produce differential signals using hard OBUFDS block */
 
     val tmds_0 = OBUFDS()
     tmds_0.I := TMDS_shift_blue(0)
@@ -377,11 +387,7 @@ case class Apb3CGA4HDMICtrl(
     tmds_2.I := TMDS_shift_red(0)
     io.hdmi.tmds_p(2) := tmds_2.O
     io.hdmi.tmds_n(2) := tmds_2.OB
-
   }
 
-  //pixclk25_in := hdmi.clk25
 }
-
-
 
