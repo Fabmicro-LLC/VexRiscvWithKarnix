@@ -304,6 +304,7 @@ void cga_set_video_mode(int mode) {
 void cga_text_scroll_up(int scroll_delay) {
 	uint32_t *fb = (uint32_t*) CGA->FB;
 
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_BLINK_EN;
 	CGA->CTRL &= ~CGA_CTRL_V_SCROLL_DIR; 
 
 	for(int i = 0; i < 16; i++) {
@@ -324,6 +325,7 @@ void cga_text_scroll_up(int scroll_delay) {
 	}
 
 	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+	CGA->CTRL2 |= CGA_CTRL2_CURSOR_BLINK_EN;
 }
 
 
@@ -336,6 +338,7 @@ void cga_text_scroll_up(int scroll_delay) {
 void cga_text_scroll_down(int scroll_delay) {
 	uint32_t *fb = (uint32_t*) CGA->FB;
 
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_BLINK_EN;
 	CGA->CTRL |= CGA_CTRL_V_SCROLL_DIR; 
 
 	for(int i = 0; i < 16; i++) {
@@ -356,6 +359,7 @@ void cga_text_scroll_down(int scroll_delay) {
 	}
 
 	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+	CGA->CTRL2 |= CGA_CTRL2_CURSOR_BLINK_EN;
 }
 
 
