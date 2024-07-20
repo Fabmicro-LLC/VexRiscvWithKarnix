@@ -61,8 +61,9 @@ bin/BrieyForKarnixTopLevel_25F.bit : bin/BrieyForKarnixTopLevel_25F.config
 
 compile : bin/BrieyForKarnixTopLevel_25F.bit
 
-prog_25F : bin/BrieyForKarnixTopLevel_25F.bit
-	ecpprog bin/BrieyForKarnixTopLevel_25F.bit
+prog : bin/BrieyForKarnixTopLevel_25F.bit
+	#ecpprog bin/BrieyForKarnixTopLevel_25F.bit
+	openFPGALoader bin/BrieyForKarnixTopLevel_25F.bit
 
 clean :
 	rm -f bin/* ../../BrieyForKarnixTopLevel* ../../font8x16x256.hex

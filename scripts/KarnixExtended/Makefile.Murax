@@ -49,8 +49,10 @@ bin/MuraxForKarnixExtendedTopLevel_25F.bit : bin/MuraxForKarnixExtendedTopLevel_
 
 compile : bin/MuraxForKarnixExtendedTopLevel_25F.bit
 
-prog_25F : bin/MuraxForKarnixExtendedTopLevel_25F.bit
-	ecpprog bin/MuraxForKarnixExtendedTopLevel_25F.bit
+prog : bin/BrieyForKarnixTopLevel_25F.bit
+	#ecpprog bin/BrieyForKarnixTopLevel_25F.bit
+	openFPGALoader bin/BrieyForKarnixTopLevel_25F.bit
+
 
 clean :
 	rm -f bin/* ../../MuraxForKarnixExtendedTopLevel*
