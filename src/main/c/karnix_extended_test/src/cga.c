@@ -151,17 +151,12 @@ void cga_bitblit(int x, int y, uint8_t *img, int img_width, int img_height) {
 
 	uint32_t* fb = (uint32_t*)CGA->FB;
 
-	int pixel_idx;
-	int pixel_offset;
-	int word_idx;
-	int word_idx_prev = -1;
-	uint32_t pixel_word;
-	uint32_t pixel_mask;
+	int pixel_idx, pixel_offset, word_idx, word_idx_prev = -1;
+	uint32_t pixel_word, pixel_mask;
 
-	int img_pixel_offset;
-	int img_word_idx;
-	uint32_t img_word;
+	int img_pixel_offset, img_word_idx;
 	int img_stride = (img_width >> 2);
+	uint32_t img_word;
 
 	int col_start = 0;
 	int col_end = img_width;
@@ -179,7 +174,6 @@ void cga_bitblit(int x, int y, uint8_t *img, int img_width, int img_height) {
 	if(y + img_height > CGA_VIDEO_HEIGHT)
 		img_height = CGA_VIDEO_HEIGHT - y;
 	
-
 	// X border limits
 	if(x >= CGA_VIDEO_WIDTH || x + img_width <= 0)
 		return;
@@ -241,8 +235,12 @@ void cga_fill_screen(char color) {
         uint32_t filler = (color << 30) | (color << 28) | (color << 26) | (color << 24);
                  filler |= (filler >> 8) | (filler >> 16) | (filler >> 24);
 
-        for(int i = 0; i < CGA_FRAMEBUFFER_SIZE / 4; i++)
+        for(int i = 0; i < CGA_FRAMEBUFFER_SIZE / 4; i+=4) {
                 *fb++ = filler;
+                *fb++ = filler;
+                *fb++ = filler;
+                *fb++ = filler;
+	}
 
 }
 

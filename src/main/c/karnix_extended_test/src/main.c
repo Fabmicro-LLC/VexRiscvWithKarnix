@@ -19,7 +19,7 @@
 #include "hub.h"
 
 /* Enable CGA test */
-#define	CGA_TEST			CGA_TEST_TEXT_SCROLL
+#define	CGA_TEST			CGA_TEST_GRAPHICS_BITBLIT //CGA_TEST_TEXT_SCROLL
 
 #define	CGA_TEST_GRAPHICS_BITBLIT	1
 #define	CGA_TEST_TEXT_SCROLL		2
@@ -346,6 +346,7 @@ void cga_test5(void) {
 		}
 	};
 
+	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during test
 
 	uint32_t t0 = get_mtime() & 0xffffffff;
 
@@ -364,11 +365,14 @@ void cga_test5(void) {
 
 	uint32_t t1 = get_mtime() & 0xffffffff;
 
+	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts
+
 	printf("cga_test5: t = %lu uS\r\n", t1 - t0);
 
 	_sprite_idx = (_sprite_idx + 1) % 3;
 	//_x += rand() % 2 - rand() % 2;
 	//_y += rand() % 2 - rand() % 2;
+	//
 }
 
 void cga_test6(void) {
@@ -533,16 +537,19 @@ void main() {
 		printf("SRAM %s!\r\n", "disabled"); 
 	}
 
+	// Perform CGA video RAM test
 	cga_ram_test(1);
 
-	uint32_t palette[16] = {
+	// Init CGA: enable graphics mode and load color palette
+	cga_set_video_mode(CGA_MODE_GRAPHICS1);
+
+	static uint32_t rgb_palette[16] = {
 			0x00000000, 0x000000f0, 0x0000f000, 0x00f00000,
 			0x0000f0f0, 0x00f000f0, 0x00f0f000, 0x00f0f0f0,
 			0x000f0f0f, 0x000f0fff, 0x000fff0f, 0x00ff0f0f,
 			0x000fffff, 0x00ff0fff, 0x00ffff0f, 0x00ffffff,
 			};
-	cga_set_palette(palette);
-
+	cga_set_palette(rgb_palette);
 
 
 	#ifdef CGA_TEST
@@ -550,7 +557,7 @@ void main() {
 
 	uint32_t cga_t0 = get_mtime();
 	for(int i = 0; i < 1000; i++) {
-		cga_fill_screen(rand()); // use color #1 (red) 
+		cga_fill_screen(rand()); // use random color 
 	}
 	uint32_t cga_t1 = get_mtime();
 
@@ -722,12 +729,12 @@ void main() {
 
 		GPIO->OUTPUT |= GPIO_OUT_LED1; // ON: LED1 - ready
 
-    		process_and_wait(10000); 
+    		process_and_wait(1000); 
 
 	       	// OFF: LED1 - ready, LED2 - MAC/MODBUS Error, LED3 - UART I/O
 		GPIO->OUTPUT &= ~(GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
-    		process_and_wait(10000); 
+    		process_and_wait(1000); 
 
 		if(0) {
 			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, "
@@ -770,13 +777,13 @@ void main() {
 		#if CGA_TEST == CGA_TEST_TEXT_SCROLL
 		{
 			if(GPIO->INPUT & GPIO_IN_KEY0) { 
-				cga_text_scroll_up(5000);
-				printf("text scroll up\r\n");
+				cga_text_scroll_up(500);
+				//printf("text scroll up\r\n");
 			}
 
 			if(GPIO->INPUT & GPIO_IN_KEY3) {
-				cga_text_scroll_down(5000);
-				printf("text scroll down\r\n");
+				cga_text_scroll_down(500);
+				//printf("text scroll down\r\n");
 			}
 		}
 		#endif

@@ -49,7 +49,10 @@ ifeq ($(FPU),yes)
 	MARCH := $(MARCH)f
 	#MABI := $(MABI)f
 	MABI := $(MABI)f
-	#CFLAGS += -u _printf_float
+	# Below uses too much RAM (over 100K)
+	#CFLAGS += -Wl,-u,vfprintf
+	#CFLAGS += -Wl,-u,_printf_float
+	#CFLAGS += -Wl,-u,_scanf_float
 endif
 ifeq ($(COMPRESSED),yes)
 	MARCH := $(MARCH)c
