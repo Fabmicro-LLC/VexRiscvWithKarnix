@@ -19,10 +19,20 @@
 #include "hub.h"
 
 /* Enable CGA test */
-#define	CGA_TEST			CGA_TEST_GRAPHICS_BITBLIT //CGA_TEST_TEXT_SCROLL
+#define	CGA_TEST_NONE			0	// No test, workinig mode
+#define	CGA_TEST_GRAPHICS_BITBLIT	1	// Test direct bitblit to video framebuffer
+#define	CGA_TEST_GRAPHICS_BITBLIT_2BUF	2	// Test double buffered bitblit
+#define	CGA_TEST_TEXT			3	// Test text mode
+#define	CGA_TEST_TEXT_SCROLL		4	// Test vertical scrolling in text mode
+#define	CGA_VIDEO_TEST			CGA_TEST_TEXT
 
-#define	CGA_TEST_GRAPHICS_BITBLIT	1
-#define	CGA_TEST_TEXT_SCROLL		2
+#define	CGA_MEM_TEST1	1
+#define	CGA_MEM_TEST2	1
+#define	CGA_MEM_TEST3	1
+
+#if CGA_VIDEO_TEST > 0 
+#include "cga_sprites.h"
+#endif
 
 
 /* Below is some linker specific stuff */
@@ -287,128 +297,65 @@ void cga_test4(void) {
 static int _x = 0, _y = 0;
 static int _sprite_idx = 0;
 
-void cga_test5(void) {
-
-	static uint8_t sprite[][4*16] = { // 16x16x2
-		{
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00010101, 0b01010101, 0b01010101, 0b01010100,
-		0b00010000, 0b00000000, 0b00000000, 0b00000100,
-		0b00010001, 0b01010101, 0b01010101, 0b01000100,
-		0b00010001, 0b00000000, 0b00000000, 0b01000100,
-		0b00010001, 0b00101010, 0b10101000, 0b01000100,
-		0b00010001, 0b00100000, 0b00001000, 0b01000100,
-		0b00010001, 0b00100111, 0b10001000, 0b01000100,
-		0b00010001, 0b00100111, 0b10001000, 0b01000100,
-		0b00010001, 0b00100000, 0b00001000, 0b01000100,
-		0b00010001, 0b00101010, 0b10101000, 0b01000100,
-		0b00010001, 0b00000000, 0b00000000, 0b01000100,
-		0b00010001, 0b01010101, 0b01010101, 0b01000100,
-		0b00010000, 0b00000000, 0b00000000, 0b00000100,
-		0b00010101, 0b01010101, 0b01010101, 0b01010100,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000
-		},
-		{
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000101, 0b01010101, 0b01010101, 0b01010000,
-		0b00000101, 0b01010101, 0b01010101, 0b01010000,
-		0b00000101, 0b00000000, 0b00000000, 0b01010000,
-		0b00000101, 0b00101010, 0b10101000, 0b01010000,
-		0b00000101, 0b00100000, 0b00001000, 0b01010000,
-		0b00000101, 0b00100101, 0b10001000, 0b01010000,
-		0b00000101, 0b00100101, 0b10001000, 0b01010000,
-		0b00000101, 0b00100000, 0b00001000, 0b01010000,
-		0b00000101, 0b00101010, 0b10101000, 0b01010000,
-		0b00000101, 0b00000000, 0b00000000, 0b01010000,
-		0b00000101, 0b01010101, 0b01010101, 0b01010000,
-		0b00000101, 0b01010101, 0b01010101, 0b01010000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000
-		},
-		{
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000001, 0b01010101, 0b01010101, 0b01000000,
-		0b00000001, 0b00000000, 0b00000000, 0b01000000,
-		0b00000001, 0b00101010, 0b10101000, 0b01000000,
-		0b00000001, 0b00100000, 0b00001000, 0b01000000,
-		0b00000001, 0b00100101, 0b10001000, 0b01000000,
-		0b00000001, 0b00100101, 0b10001000, 0b01000000,
-		0b00000001, 0b00100000, 0b00001000, 0b01000000,
-		0b00000001, 0b00101010, 0b10101000, 0b01000000,
-		0b00000001, 0b00000000, 0b00000000, 0b01000000,
-		0b00000001, 0b01010101, 0b01010101, 0b01000000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000,
-		0b00000000, 0b00000000, 0b00000000, 0b00000000
-		}
-	};
-
-	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during test
+#if (CGA_VIDEO_TEST == CGA_TEST_GRAPHICS_BITBLIT) || (CGA_VIDEO_TEST == CGA_TEST_GRAPHICS_BITBLIT_2BUF)
+void cga_video_test1(void) {
 
 	uint32_t t0 = get_mtime() & 0xffffffff;
-
 
 	//cga_wait_vblank();
 
-	//CGA->CTRL |= CGA_CTRL_BLANKING_EN; // blank screen
+	for(int y = 0; y < 240; y += 16)
+		for(int x = 0; x < 320; x += 16)
+			cga_bitblit((uint8_t*)cga_sprites[_sprite_idx], CGA->FB, x + _x, y + _y, 16, 16,
+					CGA_VIDEO_WIDTH, CGA_VIDEO_HEIGHT);
+		//	cga_bitblit((uint8_t*)cga_sprites[_sprite_idx], CGA->FB, x + _x, y + _y, 8, 8,
+		//			CGA_VIDEO_WIDTH, CGA_VIDEO_HEIGHT);
 
-	//cga_fill_screen(0);
+	uint32_t t1 = get_mtime() & 0xffffffff;
+
+	printf("cga_video_test1: t = %lu uS\r\n", t1 - t0);
+
+	_sprite_idx = (_sprite_idx + 1) % 11;
+}
+
+void cga_video_test2(void) {
+
+	uint32_t t0 = get_mtime() & 0xffffffff;
 
 	for(int y = 0; y < 240; y += 16)
 		for(int x = 0; x < 320; x += 16)
-			cga_bitblit(x + _x, y + _y, (uint8_t*)sprite[_sprite_idx], 16, 16);
-
-	//CGA->CTRL &= ~CGA_CTRL_BLANKING_EN; // restore video
-
-	uint32_t t1 = get_mtime() & 0xffffffff;
-
-	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts
-
-	printf("cga_test5: t = %lu uS\r\n", t1 - t0);
-
-	_sprite_idx = (_sprite_idx + 1) % 3;
-	//_x += rand() % 2 - rand() % 2;
-	//_y += rand() % 2 - rand() % 2;
-	//
-}
-
-void cga_test6(void) {
-	static int x1 = 10, y1 = 10, x2 = 300, y2 = 200; 
-	uint32_t t0 = get_mtime() & 0xffffffff;
-
-	int color = rand() % 3 + 1;
+			cga_bitblit((uint8_t*)cga_sprites[_sprite_idx], (uint8_t*)0x90001000, x + _x, y + _y, 16, 16,
+					CGA_VIDEO_WIDTH, CGA_VIDEO_HEIGHT);
 
 	cga_wait_vblank();
 
-	//cga_fill_screen(0);
-
-	for(int i = 0; i < 100; i++) {
-		cga_draw_line(x1, y1, x2, y2, color);
-		x1 += rand() % 2 - rand() % 2;
-		y1 += rand() % 2 - rand() % 2;
-		x2 += rand() % 2 - rand() % 2;
-		y2 += rand() % 2 - rand() % 2;
-		if(x1 > 320) x1 = x1 - 320;
-		if(x2 > 320) x2 = x2 - 320;
-		if(y1 > 240) y1 = y1 - 240;
-		if(y2 > 240) y2 = y2 - 240;
-	}
+	memcpy(CGA->FB, (uint8_t*)0x90001000, 19200);
 
 	uint32_t t1 = get_mtime() & 0xffffffff;
 
-	printf("cga_test6: t0 = %lu, t1 = %lu, delta = %lu uS\r\n", t0, t1, t1 - t0);
+	printf("cga_video_test2: t = %lu uS\r\n", t1 - t0);
 
+	_sprite_idx = (_sprite_idx + 1) % 11;
 }
+#endif
 
-void cga_test7(void) {
+#if (CGA_VIDEO_TEST == CGA_TEST_TEXT) || (CGA_VIDEO_TEST == CGA_TEST_TEXT_SCROLL)
+void cga_video_test3(void) {
 	uint32_t *fb = (uint32_t*) CGA->FB;
 
+	uint32_t t0 = get_mtime() & 0xffffffff;
+
 	cga_wait_vblank();
 
-	uint32_t t0 = get_mtime() & 0xffffffff;
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_BLINK;
+	CGA->CTRL2 |= 5 << CGA_CTRL2_CURSOR_BLINK_SHIFT;
+
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_COLOR;
+	CGA->CTRL2 |= 6 << CGA_CTRL2_CURSOR_COLOR_SHIFT;
+
+	cga_set_cursor_xy(2, 1);
+
+	cga_set_cursor_style(10, 14);
 
 	for(int y = 0; y < CGA_TEXT_HEIGHT_TOTAL; y++)
 		for(int x = 0; x < CGA_TEXT_WIDTH; x++) {
@@ -424,41 +371,9 @@ void cga_test7(void) {
 
 	uint32_t t1 = get_mtime() & 0xffffffff;
 
-	printf("cga_test7: t = %lu uS, _y = %d\r\n", t1 - t0, _y);
-
-	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
-	if(_y >= 0) {
-		CGA->CTRL &= ~CGA_CTRL_V_SCROLL_DIR;
-		CGA->CTRL |= (_y << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
-	} else {
-		CGA->CTRL |= CGA_CTRL_V_SCROLL_DIR;
-		CGA->CTRL |= ((-_y) << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
-	}
-
+	printf("cga_video_test3: text mode t = %lu uS\r\n", t1 - t0);
 }
-
-void cga_test(void) {
-	static int X = 0, Y = 0;
-
-	cga_wait_vblank();
-
-	uint32_t *fb = (uint32_t*) CGA->FB;
-	for(int i = 0; i < 320*100/16; i++)
-		*fb++ = 0x55555555; 
-	for(int i = 0; i < 320*100/16; i++)
-		*fb++ = 0xaaaaaaaa; 
-	for(int i = 0; i < 320*40/16; i++)
-		*fb++ = 0xffffffff; 
-
-	fb = (uint32_t*) CGA->FB;
-	fb[20*20] = 0b00001010101010101010101010101000;
-	fb[21*20] = 0b00100000000000000000000000000010;
-	fb[22*20] = 0b00100011111111111111111111110010;
-	fb[23*20] = 0b00100000000000000000000000000010;
-	fb[24*20] = 0b00001010101010101010101010101000;
-
-	cga_video_print((X++)%320, (Y++)%240, 2 | CGA_OR_BG, "Hello, CGA!", 11, font_12x16, 12, 16);
-}
+#endif
 
 void main() {
 
@@ -552,19 +467,67 @@ void main() {
 	cga_set_palette(rgb_palette);
 
 
-	#ifdef CGA_TEST
-	printf("Executing CGA video framebuffer performance test...\r\n");
+	#ifdef CGA_MEM_TEST1
+	printf("Executing CGA video framebuffer write performance test...\r\n");
 
+	char color = rand(); // use random color
+
+	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during test
 	uint32_t cga_t0 = get_mtime();
 	for(int i = 0; i < 1000; i++) {
-		cga_fill_screen(rand()); // use random color 
+		cga_fill_screen(color);
 	}
 	uint32_t cga_t1 = get_mtime();
+	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts after test
 
-	printf("CGA framebuffer perf: %ld uS after 1000 frames\r\n", cga_t1 - cga_t0);
-
-	//cga_test2();
+	printf("CGA framebuffer write perf: %ld uS after 1000 frames\r\n", cga_t1 - cga_t0);
 	#endif
+
+	#ifdef CGA_MEM_TEST2
+	printf("Executing CGA video framebuffer copy from RAM performance test...\r\n");
+
+	static char ram_test_buffer[960];
+
+	for(int i = 0; i < 960; i++)
+	       ram_test_buffer[i] = rand();	
+
+	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during test
+	uint32_t cga_t2 = get_mtime();
+	for(int i = 0; i < 1000; i++) {
+		for(int j = 0; j < 20; j++)
+			memcpy(CGA->FB + j * 960, ram_test_buffer, 960);
+
+	}
+	uint32_t cga_t3 = get_mtime();
+	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts after test
+
+	printf("CGA framebuffer copy from RAM perf: %ld uS after 1000 frames\r\n", cga_t3 - cga_t2);
+	#endif
+
+	#ifdef CGA_MEM_TEST3
+	printf("Executing CGA video framebuffer copy from external SRAM performance test...\r\n");
+
+	char *sram_test_buffer = (char*) 0x90000000;
+
+	for(int i = 0; i < 960; i++)
+	       sram_test_buffer[i] = rand();	
+
+	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during test
+	uint32_t cga_t4 = get_mtime();
+	for(int i = 0; i < 1000; i++) {
+		for(int j = 0; j < 20; j++)
+			memcpy(CGA->FB + j * 960, sram_test_buffer, 960);
+
+	}
+	uint32_t cga_t5 = get_mtime();
+	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts after test
+
+	printf("CGA framebuffer copy from external SRAM perf: %ld uS after 1000 frames\r\n", cga_t5 - cga_t4);
+	#endif
+
+
+
+	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during hardware init 
 
 	// Disable HUB controller
 	//HUB->CONTROL = 0;
@@ -702,7 +665,7 @@ void main() {
     		process_and_wait(2000000); 
 	}
 
-	memset((void*)HUB->FB,  0, hub_frame_size); 
+	//memset((void*)HUB->FB,  0, hub_frame_size); 
 
 	short *ring_buffer = (short *)malloc(30000*2);
 
@@ -715,13 +678,10 @@ void main() {
 
 	float x = 1.1;
 
-	#if CGA_TEST == CGA_TEST_GRAPHICS_BITBLIT
+	#if (CGA_VIDEO_TEST == CGA_TEST_GRAPHICS_BITBLIT) || (CGA_VIDEO_TEST == CGA_TEST_GRAPHICS_BITBLIT_2BUF)
 	cga_set_video_mode(CGA_MODE_GRAPHICS1);
-	#endif
-
-	#if CGA_TEST == CGA_TEST_TEXT_SCROLL
+	#else
 	cga_set_video_mode(CGA_MODE_TEXT);
-	cga_test7();
 	#endif
 
 	while(1) {
@@ -753,28 +713,54 @@ void main() {
 
 		}
 
-		#if CGA_TEST == CGA_TEST_GRAPHICS_BITBLIT
+		#if CGA_VIDEO_TEST == CGA_TEST_GRAPHICS_BITBLIT
 	       	{
-			/* Test graphics mode bit blit */
+			/* Test graphics mode Bitblit */
 
-			if(GPIO->INPUT & GPIO_IN_KEY0)
+			if(GPIO->INPUT & GPIO_IN_KEY0 && _sprite_idx == 0)
 				_x++;
 
-			if(GPIO->INPUT & GPIO_IN_KEY3)
+			if(GPIO->INPUT & GPIO_IN_KEY3 && _sprite_idx == 0)
 				_x--;
 	
-			if(GPIO->INPUT & GPIO_IN_KEY1)
+			if(GPIO->INPUT & GPIO_IN_KEY1 && _sprite_idx == 0)
 				_y--;
 	
-			if(GPIO->INPUT & GPIO_IN_KEY2)
+			if(GPIO->INPUT & GPIO_IN_KEY2 && _sprite_idx == 0)
 				_y++;
 
-			cga_test5(); // full screen bitblit
+			cga_video_test1(); // full screen directly with bitblit
+		}
+		#endif
+
+		#if CGA_VIDEO_TEST == CGA_TEST_GRAPHICS_BITBLIT_2BUF
+	       	{
+			/* Test graphics mode Bitblit */
+
+			if(GPIO->INPUT & GPIO_IN_KEY0 && _sprite_idx == 0)
+				_x++;
+
+			if(GPIO->INPUT & GPIO_IN_KEY3 && _sprite_idx == 0)
+				_x--;
+	
+			if(GPIO->INPUT & GPIO_IN_KEY1 && _sprite_idx == 0)
+				_y--;
+	
+			if(GPIO->INPUT & GPIO_IN_KEY2 && _sprite_idx == 0)
+				_y++;
+
+			cga_video_test2(); // full screen using double buffering
 		}
 		#endif
 
 
-		#if CGA_TEST == CGA_TEST_TEXT_SCROLL
+		#if CGA_VIDEO_TEST == CGA_TEST_TEXT
+		{
+			cga_video_test3();
+		}
+		#endif
+
+		#if CGA_VIDEO_TEST == CGA_TEST_TEXT_SCROLL
 		{
 			if(GPIO->INPUT & GPIO_IN_KEY0) { 
 				cga_text_scroll_up(500);

@@ -147,46 +147,56 @@ void cga_wait_vblank(void) {
 	while(!(CGA->CTRL & CGA_CTRL_VBLANK_FLAG));
 }
 
-void cga_bitblit(int x, int y, uint8_t *img, int img_width, int img_height) {
+/*
+ * cga_bitblit - copy image from src memory area to dst memory area.
+ *
+ * dst mem area is treaded as videoframebuffer of size CGA_VIDEO_WIDTH x CGA_VIDEO_HEIGHT pixels.
+ * Each pixel in CGA graph mode is two bit color index. Pixel bits are packed left to right from
+ * high to low bits of each byte.
+ *
+ */
+void cga_bitblit(uint8_t *src_img, uint8_t *dst_img, int x, int y, int src_width, int src_height,
+		int dst_width, int dst_height) {
 
-	uint32_t* fb = (uint32_t*)CGA->FB;
+	uint32_t* dst = (uint32_t*)dst_img;
+	uint8_t* src = (uint8_t*)src_img;
 
 	int pixel_idx, pixel_offset, word_idx, word_idx_prev = -1;
 	uint32_t pixel_word, pixel_mask;
 
-	int img_pixel_offset, img_word_idx;
-	int img_stride = (img_width >> 2);
-	uint32_t img_word;
+	int src_pixel_offset, src_word_idx;
+	int src_stride = (src_width >> 2);
+	uint32_t src_word;
 
 	int col_start = 0;
-	int col_end = img_width;
+	int col_end = src_width;
 
 	// Y border limits
-	if(y >= CGA_VIDEO_HEIGHT || y + img_height <= 0)
+	if(y >= dst_height || y + src_height <= 0)
 		return;
 
 	if(y < 0) {
-		img += -y * img_stride;
-		img_height += y;
+		src += -y * src_stride;
+		src_height += y;
 		y = 0;
 	}
 
-	if(y + img_height > CGA_VIDEO_HEIGHT)
-		img_height = CGA_VIDEO_HEIGHT - y;
+	if(y + src_height > dst_height)
+		src_height = dst_height - y;
 	
 	// X border limits
-	if(x >= CGA_VIDEO_WIDTH || x + img_width <= 0)
+	if(x >= dst_width || x + src_width <= 0)
 		return;
 
 	if(x < 0)
 		col_start = -x;
 
-	if(x + img_width > CGA_VIDEO_WIDTH)
-		col_end = CGA_VIDEO_WIDTH - x;
+	if(x + src_width > dst_width)
+		col_end = dst_width - x;
 	
-	int pixel_idx_0 = y * CGA_VIDEO_WIDTH + x;
+	int pixel_idx_0 = y * dst_width + x;
 
-	for(int row = 0; row < img_height; row++) {
+	for(int row = 0; row < src_height; row++) {
 
 		for(int col = col_start; col < col_end; col++) {
 
@@ -199,34 +209,39 @@ void cga_bitblit(int x, int y, uint8_t *img, int img_width, int img_height) {
 
 			if(word_idx != word_idx_prev) {
 				if(word_idx_prev != -1)
-					fb[word_idx_prev] = pixel_word;
+					dst[word_idx_prev] = pixel_word;
 
-				pixel_word = fb[word_idx];
+				pixel_word = dst[word_idx];
 			}
 
 			// Get image data
-			img_word_idx = col >> 2; // 4 pixels per byte
-			img_pixel_offset = (3 - (col & 0x03)) << 1;
-			img_word = img[img_word_idx];
+			src_word_idx = col >> 2; // 4 pixels per byte
+			src_pixel_offset = (3 - (col & 0x03)) << 1;
+			src_word = src[src_word_idx];
 
 			pixel_word &= ~pixel_mask;
 
-			if(pixel_offset >= img_pixel_offset)
-				img_word <<= (pixel_offset - img_pixel_offset);
+			if(pixel_offset >= src_pixel_offset)
+				src_word <<= (pixel_offset - src_pixel_offset);
 			else
-				img_word >>= (img_pixel_offset - pixel_offset);
+				src_word >>= (src_pixel_offset - pixel_offset);
 
-			pixel_word |= img_word & pixel_mask;
+			pixel_word |= src_word & pixel_mask;
 
 			word_idx_prev = word_idx;
 		}
 
-		img += img_stride;
-		pixel_idx_0 += CGA_VIDEO_WIDTH;
+		src += src_stride;
+		pixel_idx_0 += dst_width;
 	}
-	fb[word_idx] = pixel_word;
+	dst[word_idx] = pixel_word;
 }
 
+
+/*
+ * cga_fill_screen - fills whole screen area with a constand color index.
+ *
+ */
 void cga_fill_screen(char color) {
         uint32_t *fb = (uint32_t*) CGA->FB;
 
@@ -235,7 +250,11 @@ void cga_fill_screen(char color) {
         uint32_t filler = (color << 30) | (color << 28) | (color << 26) | (color << 24);
                  filler |= (filler >> 8) | (filler >> 16) | (filler >> 24);
 
-        for(int i = 0; i < CGA_FRAMEBUFFER_SIZE / 4; i+=4) {
+        for(int i = 0; i < CGA_FRAMEBUFFER_SIZE / (8*4); i++) {
+                *fb++ = filler;
+                *fb++ = filler;
+                *fb++ = filler;
+                *fb++ = filler;
                 *fb++ = filler;
                 *fb++ = filler;
                 *fb++ = filler;
@@ -292,6 +311,23 @@ void cga_set_video_mode(int mode) {
 	printf("cga_set_video_mode: mode = %d, ctrl = %p\r\n", mode, CGA->CTRL);
 }
 
+
+/*
+ * Set vertical scroll register value to scrl. Resulting effect is:
+ * negative value - scroll up scrl scan-lines,
+ * positive value - scroll down scrl scan-lines,
+ * zero value - no scroll.
+ */
+void cga_set_scroll(int scrl) {
+        CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
+        if(scrl >= 0) {   
+                CGA->CTRL &= ~CGA_CTRL_V_SCROLL_DIR;
+                CGA->CTRL |= (scrl << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
+        } else {
+                CGA->CTRL |= CGA_CTRL_V_SCROLL_DIR;
+                CGA->CTRL |= ((-scrl) << CGA_CTRL_V_SCROLL_SHIFT) & CGA_CTRL_V_SCROLL;
+        }
+}
 
 /*
  * Smoothly scroll all the text on the screen upwards by 16 pixels (one line).
@@ -358,6 +394,32 @@ void cga_text_scroll_down(int scroll_delay) {
 
 	CGA->CTRL &= ~CGA_CTRL_V_SCROLL;
 	CGA->CTRL2 |= CGA_CTRL2_CURSOR_BLINK_EN;
+}
+
+
+void cga_set_cursor_xy(int x, int y) {
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_X;
+	CGA->CTRL2 |= (x & 0xff) << CGA_CTRL2_CURSOR_X_SHIFT;
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_Y;
+	CGA->CTRL2 |= (y & 0xff) << CGA_CTRL2_CURSOR_Y_SHIFT;
+}
+
+
+void cga_set_cursor_style(int top, int bottom) {
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_TOP;
+	CGA->CTRL2 |= (top & 0x0f) << CGA_CTRL2_CURSOR_TOP_SHIFT;
+	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_BOTTOM;
+	CGA->CTRL2 |= (bottom & 0x0f) << CGA_CTRL2_CURSOR_BOTTOM_SHIFT;
+}
+
+
+inline int cga_get_cursor_x(void) {
+	return (CGA->CTRL2 >> CGA_CTRL2_CURSOR_X_SHIFT) & 0xff;
+}
+
+
+inline int cga_get_cursor_y(void) {
+	return (CGA->CTRL2 >> CGA_CTRL2_CURSOR_Y_SHIFT) & 0xff;
 }
 
 

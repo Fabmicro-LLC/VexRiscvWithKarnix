@@ -2,6 +2,7 @@ PROJ_NAME=karnix_extended_test
 DEBUG=no
 BENCH=no
 MULDIV=yes
+ATOMIC=yes
 FPU=yes
 COMPRESSED=yes
 
@@ -45,6 +46,9 @@ MARCH := rv32i
 ifeq ($(MULDIV),yes)
 	MARCH := $(MARCH)m
 endif
+ifeq ($(ATOMIC),yes)
+	MARCH := $(MARCH)a
+endif
 ifeq ($(FPU),yes)
 	MARCH := $(MARCH)f
 	#MABI := $(MABI)f
@@ -57,6 +61,9 @@ endif
 ifeq ($(COMPRESSED),yes)
 	MARCH := $(MARCH)c
 endif
+
+#CFLAGS += -fwhole-program -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
+# use suffix __attribute__((externally_visible))
 
 CFLAGS += -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
 LDFLAGS += -march=$(MARCH)  -mabi=$(MABI) -specs=nano.specs -lnosys -lc_nano

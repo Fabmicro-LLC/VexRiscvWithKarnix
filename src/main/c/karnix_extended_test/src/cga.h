@@ -30,9 +30,9 @@ extern const char font_12x16[];
 #define	CGA_CTRL2_CURSOR_X		(0xff << CGA_CTRL2_CURSOR_X_SHIFT)
 #define	CGA_CTRL2_CURSOR_Y_SHIFT	8
 #define	CGA_CTRL2_CURSOR_Y		(0xff << CGA_CTRL2_CURSOR_Y_SHIFT)
-#define	CGA_CTRL2_CURSOR_BOTTOM_SHIFT	14
+#define	CGA_CTRL2_CURSOR_BOTTOM_SHIFT	16
 #define	CGA_CTRL2_CURSOR_BOTTOM		(0x0f << CGA_CTRL2_CURSOR_BOTTOM_SHIFT)
-#define	CGA_CTRL2_CURSOR_TOP_SHIFT	16
+#define	CGA_CTRL2_CURSOR_TOP_SHIFT	20
 #define	CGA_CTRL2_CURSOR_TOP		(0x0f << CGA_CTRL2_CURSOR_TOP_SHIFT)
 #define	CGA_CTRL2_CURSOR_BLINK_SHIFT	24
 #define	CGA_CTRL2_CURSOR_BLINK		(0x07 << CGA_CTRL2_CURSOR_BLINK_SHIFT)
@@ -68,14 +68,20 @@ void cga_video_print_char(volatile uint8_t* fb, char c, int x, int y, char color
 		int frame_height, const char *font, int font_width, int font_height);
 
 void cga_wait_vblank(void);
-void cga_bitblit(int x, int y, uint8_t *img, int img_width, int img_height);
+void cga_bitblit(uint8_t *src_img, uint8_t *dst_img, int x, int y, int src_width, int src_height,
+		int dst_width, int dst_height);
 void cga_rotate_palette_left(uint32_t palettes_to_rotate);
 void cga_fill_screen(char color);
 void cga_draw_pixel(int x, int y, int color);
 void cga_draw_line(int x1, int y1, int x2, int y2, int color);
 void cga_set_video_mode(int mode);
+void cga_set_scroll(int scrl);
 void cga_text_scroll_up(int scroll_delay);
 void cga_text_scroll_down(int scroll_delay);
+void cga_set_cursor_xy(int x, int y);
+void cga_set_cursor_style(int top, int bottom);
+inline int cga_get_cursor_x(void);
+inline int cga_get_cursor_y(void);
 
 #endif /* __CGA_H__ */
 

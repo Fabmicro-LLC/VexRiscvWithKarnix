@@ -244,7 +244,8 @@ case class Apb3CGA4HDMICtrl(
 
           var x = (CounterX - horiz_back_porch)(9 downto 3) // current ray column position
           var y = (CounterY_ - vert_back_porch)(9 downto 4) // current ray raw position
-          var blink_flag = CounterF(cursor_blink) && cursor_blink_enabled
+          var blink_flag = CounterF(cursor_blink) && cursor_blink_enabled &&
+                           char_row >= cursor_top && char_row <= cursor_bottom
 
           when(x === cursor_x && y === cursor_y && blink_flag) {
             // Implement blinking cursor
