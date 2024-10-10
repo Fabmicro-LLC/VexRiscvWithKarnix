@@ -219,7 +219,7 @@ case class Apb3CGA4HDMICtrl(
 
         // Load flag active on each 6th and 7th pixel
         word_load := (CounterX >= U(horiz_back_porch - 8) && CounterX < U(horiz_back_porch + horiz_active)) &&
-                     (CounterY_ < vert_back_porch + vert_active + 16) && ((CounterX & U(6)) === U(6))
+                     (CounterY < vert_back_porch + vert_active + 16) && ((CounterX & U(6)) === U(6))
 
         // Index of the 32 bit word in framebuffer memory: addr = (y / 16) * 80 + x/8
         word_address := ((CounterY_ - 16)(9 downto 4) * 80 +
