@@ -575,7 +575,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 59.0 MHz, 
+		axiFrequency = 60.0 MHz, 
 		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"

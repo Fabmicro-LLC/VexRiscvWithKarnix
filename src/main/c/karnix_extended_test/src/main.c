@@ -17,6 +17,7 @@
 #include "eeprom.h"
 #include "config.h"
 #include "hub.h"
+#include "cga.h"
 
 /* Enable CGA test */
 #define	CGA_TEST_NONE			0	// No test, workinig mode
@@ -24,7 +25,7 @@
 #define	CGA_TEST_GRAPHICS_BITBLIT_2BUF	2	// Test double buffered bitblit
 #define	CGA_TEST_TEXT			3	// Test text mode
 #define	CGA_TEST_TEXT_SCROLL		4	// Test vertical scrolling in text mode
-#define	CGA_VIDEO_TEST			CGA_TEST_TEXT
+#define	CGA_VIDEO_TEST			CGA_TEST_TEXT_SCROLL
 
 #define	CGA_MEM_TEST1	1
 #define	CGA_MEM_TEST2	1
@@ -684,6 +685,10 @@ void main() {
 	cga_set_video_mode(CGA_MODE_TEXT);
 	#endif
 
+	#if (CGA_VIDEO_TEST == CGA_TEST_TEXT) || (CGA_VIDEO_TEST == CGA_TEST_TEXT_SCROLL)
+	cga_video_test3();
+	#endif
+
 	while(1) {
 		int audio_idx = 0;
 
@@ -756,21 +761,26 @@ void main() {
 
 		#if CGA_VIDEO_TEST == CGA_TEST_TEXT
 		{
-			cga_video_test3();
+			static int _scroll = 0;
+
+			if(GPIO->INPUT & GPIO_IN_KEY0)
+		       		_scroll--;
+
+			if(GPIO->INPUT & GPIO_IN_KEY3)
+		       		_scroll++;
+
+			cga_wait_vblank();
+			cga_set_scroll(_scroll);
 		}
 		#endif
 
 		#if CGA_VIDEO_TEST == CGA_TEST_TEXT_SCROLL
 		{
-			if(GPIO->INPUT & GPIO_IN_KEY0) { 
+			if(GPIO->INPUT & GPIO_IN_KEY0)
 				cga_text_scroll_up(500);
-				//printf("text scroll up\r\n");
-			}
 
-			if(GPIO->INPUT & GPIO_IN_KEY3) {
+			if(GPIO->INPUT & GPIO_IN_KEY3)
 				cga_text_scroll_down(500);
-				//printf("text scroll down\r\n");
-			}
 		}
 		#endif
 

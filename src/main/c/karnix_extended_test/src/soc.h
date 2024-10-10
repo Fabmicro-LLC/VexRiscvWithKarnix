@@ -25,7 +25,6 @@
 #define PLIC		((PLIC_Reg*)(0xF0060000))
 #define GPIO		((Gpio_Reg*)(0xF0000000))
 #define MAC		((MAC_Reg*)(0xF0070000))
-#define CGA		((CGA_Reg*)(0xF0040000))
 #define I2C0		((I2C_Reg*)(0xF0090000))
 #define WD		((WD_Reg*)(0xF00A0000))
 #define MTIME		(*(volatile unsigned long long*)(0xF00B0000))

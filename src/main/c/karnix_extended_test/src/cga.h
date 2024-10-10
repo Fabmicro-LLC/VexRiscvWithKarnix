@@ -2,6 +2,7 @@
 #define __CGA_H__
 
 #include <stdint.h>
+#include <string.h>
 
 extern const char font_6x8[];
 extern const char font_12x16[];
@@ -57,9 +58,9 @@ typedef struct
 } CGA_Reg;
 #pragma pack(0)
 
-int cga_ram_test(int interations);
+#define CGA             ((CGA_Reg*)(0xF0040000))
 
-void cga_set_palette(uint32_t c[16]);
+int cga_ram_test(int interations);
 
 void cga_video_print(int x, int y, int colors, char *text, int text_size, const char *font,
 		int font_width, int font_height);
@@ -67,7 +68,6 @@ void cga_video_print(int x, int y, int colors, char *text, int text_size, const 
 void cga_video_print_char(volatile uint8_t* fb, char c, int x, int y, char colors, int frame_width,
 		int frame_height, const char *font, int font_width, int font_height);
 
-void cga_wait_vblank(void);
 void cga_bitblit(uint8_t *src_img, uint8_t *dst_img, int x, int y, int src_width, int src_height,
 		int dst_width, int dst_height);
 void cga_rotate_palette_left(uint32_t palettes_to_rotate);
@@ -80,8 +80,22 @@ void cga_text_scroll_up(int scroll_delay);
 void cga_text_scroll_down(int scroll_delay);
 void cga_set_cursor_xy(int x, int y);
 void cga_set_cursor_style(int top, int bottom);
-inline int cga_get_cursor_x(void);
-inline int cga_get_cursor_y(void);
+
+static inline int cga_get_cursor_x(void) {
+        return (CGA->CTRL2 >> CGA_CTRL2_CURSOR_X_SHIFT) & 0xff;
+}
+
+static inline int cga_get_cursor_y(void) {
+        return (CGA->CTRL2 >> CGA_CTRL2_CURSOR_Y_SHIFT) & 0xff;
+}
+
+static inline void cga_wait_vblank(void) {
+        while(!(CGA->CTRL & CGA_CTRL_VBLANK_FLAG));
+}
+
+static inline void cga_set_palette(uint32_t c[16]) {
+	memcpy((void *)CGA->PALETTE, c, 16 * 4);
+}
 
 #endif /* __CGA_H__ */
 

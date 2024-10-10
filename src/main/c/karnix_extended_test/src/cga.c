@@ -1,11 +1,6 @@
 #include "cga.h"
-#include "soc.h"
 #include "utils.h"
 #include <string.h>
-
-void cga_set_palette(uint32_t c[16]) {
-	memcpy((void *)CGA->PALETTE, c, 16 * 4);
-}
 
 void cga_rotate_palette_left(uint32_t palettes_to_rotate) {
 
@@ -141,10 +136,6 @@ int cga_ram_test(int interations) {
 	}
 
 	return fails++;
-}
-
-void cga_wait_vblank(void) {
-	while(!(CGA->CTRL & CGA_CTRL_VBLANK_FLAG));
 }
 
 /*
@@ -410,16 +401,6 @@ void cga_set_cursor_style(int top, int bottom) {
 	CGA->CTRL2 |= (top & 0x0f) << CGA_CTRL2_CURSOR_TOP_SHIFT;
 	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_BOTTOM;
 	CGA->CTRL2 |= (bottom & 0x0f) << CGA_CTRL2_CURSOR_BOTTOM_SHIFT;
-}
-
-
-inline int cga_get_cursor_x(void) {
-	return (CGA->CTRL2 >> CGA_CTRL2_CURSOR_X_SHIFT) & 0xff;
-}
-
-
-inline int cga_get_cursor_y(void) {
-	return (CGA->CTRL2 >> CGA_CTRL2_CURSOR_Y_SHIFT) & 0xff;
 }
 
 
