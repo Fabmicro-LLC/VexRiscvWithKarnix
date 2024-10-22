@@ -5,6 +5,7 @@
 #include "plic.h"
 #include "utils.h"
 #include "lwip/inet.h"
+#include "lwip/sys.h"
 #include "lwip/tcp.h"
 #include "lwip/ip4_frag.h"
 #include "lwip/netif.h"
@@ -35,11 +36,11 @@ uint32_t sys_now(void) {
 	return get_mtime() / 1000; // return current timestamp in ms
 }
 
-void sys_arch_protect(void) {
+sys_prot_t sys_arch_protect(void) {
 	//csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts
 }
 
-void sys_arch_unprotect(void) {
+void sys_arch_unprotect(sys_prot_t pval) {
 	//csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts
 }
 
