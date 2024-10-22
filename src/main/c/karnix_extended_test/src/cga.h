@@ -74,7 +74,7 @@ void cga_rotate_palette_left(uint32_t palettes_to_rotate);
 void cga_fill_screen(char color);
 void cga_draw_pixel(int x, int y, int color);
 void cga_draw_line(int x1, int y1, int x2, int y2, int color);
-void cga_set_video_mode(int mode);
+void cga_text_print(uint8_t *framebuffer, int x, int y, int fg_color, int bg_color, char *text);
 void cga_set_scroll(int scrl);
 void cga_text_scroll_up(int scroll_delay);
 void cga_text_scroll_down(int scroll_delay);
@@ -93,9 +93,26 @@ static inline void cga_wait_vblank(void) {
         while(!(CGA->CTRL & CGA_CTRL_VBLANK_FLAG));
 }
 
+static inline void cga_wait_vblank_end(void) {
+        while(CGA->CTRL & CGA_CTRL_VBLANK_FLAG);
+}
+
 static inline void cga_set_palette(uint32_t c[16]) {
 	memcpy((void *)CGA->PALETTE, c, 16 * 4);
 }
+
+static inline void cga_set_video_mode(int mode) {
+	CGA->CTRL &= ~CGA_CTRL_VIDEO_MODE;
+	CGA->CTRL |= (mode << CGA_CTRL_VIDEO_MODE_SHIFT) & CGA_CTRL_VIDEO_MODE;
+	//printf("cga_set_video_mode: mode = %d, ctrl = %p\r\n", mode, CGA->CTRL);
+}
+
+#define	ESC_UP		"\033U"	// Move cursor upward 1 line
+#define	ESC_DOWN	"\033D" // Move cursor downward 1 line (same as \n)
+#define	ESC_LEFT	"\033L" // Move cursor to the left 1 char
+#define	ESC_RIGTH	"\033R" // Move cursor to the right 1 char
+#define	ESC_FG		"\033F" // Set foreground color
+#define	ESC_BG		"\033B" // Set background color
 
 #endif /* __CGA_H__ */
 

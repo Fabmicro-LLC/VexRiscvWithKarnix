@@ -1,6 +1,7 @@
 #include "cga.h"
 #include "utils.h"
 #include <string.h>
+#include <stdlib.h>
 
 void cga_rotate_palette_left(uint32_t palettes_to_rotate) {
 
@@ -294,15 +295,6 @@ void cga_draw_line(int x0, int y0, int x1, int y1, int color) {
 }
 
 
-void cga_set_video_mode(int mode) {
-
-	CGA->CTRL &= ~CGA_CTRL_VIDEO_MODE;
-	CGA->CTRL |= (mode << CGA_CTRL_VIDEO_MODE_SHIFT) & CGA_CTRL_VIDEO_MODE;
-
-	printf("cga_set_video_mode: mode = %d, ctrl = %p\r\n", mode, CGA->CTRL);
-}
-
-
 /*
  * Set vertical scroll register value to scrl. Resulting effect is:
  * negative value - scroll up scrl scan-lines,
@@ -401,6 +393,67 @@ void cga_set_cursor_style(int top, int bottom) {
 	CGA->CTRL2 |= (top & 0x0f) << CGA_CTRL2_CURSOR_TOP_SHIFT;
 	CGA->CTRL2 &= ~CGA_CTRL2_CURSOR_BOTTOM;
 	CGA->CTRL2 |= (bottom & 0x0f) << CGA_CTRL2_CURSOR_BOTTOM_SHIFT;
+}
+
+void cga_text_print(uint8_t *framebuffer, int x, int y, int fg_color, int bg_color, char *text)
+{
+	if(!text)
+		return;
+
+	uint32_t *fb = (uint32_t*) framebuffer;
+	uint32_t attributes = (fg_color << 8) | (bg_color << 16);
+
+	fb += CGA_TEXT_WIDTH * y + x;
+
+	for(int i = 0; text[i]; i++) {
+		if(text[i] == '\n') {
+			fb += CGA_TEXT_WIDTH;
+		} else if(text[i] == '\r') {
+			fb -= (fb - (uint32_t*)framebuffer) % CGA_TEXT_WIDTH;
+		} else if(text[i] == '\t') {
+			for(int j = 0; j < 8; j++)
+				*fb++ = attributes | 0x20;
+		} else if(text[i] == 0x1b) {
+			i++;
+			switch(text[i]) {
+				case 'F': {
+					i++;
+					attributes &= ~ 0x0000ff00;
+					attributes |= atoi(&text[i]) << 8;
+					while(text[++i] != ';');
+				} break;
+				case 'B': {
+					i++;
+					attributes &= ~ 0x00ff0000;
+					attributes |= atoi(&text[i]) << 16;
+					while(text[++i] != ';');
+				} break;
+				case 'D': {
+					i++;
+					fb += CGA_TEXT_WIDTH * atoi(&text[i]);
+					while(text[++i] != ';');
+				} break;
+				case 'U': {
+					i++;
+					fb -= CGA_TEXT_WIDTH * atoi(&text[i]);
+					while(text[++i] != ';');
+				} break;
+				case 'L': {
+					i++;
+					fb -= atoi(&text[i]);
+					while(text[++i] != ';');
+				} break;
+				case 'R': {
+					i++;
+					fb += atoi(&text[i]);
+					while(text[++i] != ';');
+				} break;
+			}
+			continue;
+		} else
+			*fb++ = attributes | text[i];
+	}
+
 }
 
 
