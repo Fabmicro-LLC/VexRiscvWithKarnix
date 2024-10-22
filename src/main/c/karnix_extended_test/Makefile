@@ -65,7 +65,7 @@ endif
 #CFLAGS += -fwhole-program -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
 # use suffix __attribute__((externally_visible))
 
-CFLAGS += -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
+CFLAGS += -march=$(MARCH)  -mabi=$(MABI) -DNDEBUG -flto -fno-common -fno-builtin-printf -DBUILD_NUMBER=$(BUILD_NUMBER)+1 
 LDFLAGS += -march=$(MARCH)  -mabi=$(MABI) -specs=nano.specs -lnosys -lc_nano
 #LDFLAGS += -march=rv32im -mabi=ilp32 -specs=nano.specs -lnosys -lc_nano
 

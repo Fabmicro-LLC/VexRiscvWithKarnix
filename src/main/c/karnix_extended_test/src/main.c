@@ -25,7 +25,11 @@
 #define	CGA_TEST_GRAPHICS_BITBLIT_2BUF	2	// Test double buffered bitblit
 #define	CGA_TEST_TEXT			3	// Test text mode
 #define	CGA_TEST_TEXT_SCROLL		4	// Test vertical scrolling in text mode
-#define	CGA_VIDEO_TEST			CGA_TEST_TEXT_SCROLL
+#define	CGA_TEST_VIDEOFX_TEXTFLIC	5	// Test of video effect: fast changing text
+#define	CGA_TEST_VIDEOFX_DYNPALETTE	6	// Test of video effect: dynamic palette in text mode
+#define	CGA_TEST_VIDEOFX_HYBRID		7	// Test of video effect: mix text and graphics mode
+#define	CGA_TEST_DEMO			8	// Old-school intro
+#define	CGA_VIDEO_TEST			CGA_TEST_DEMO
 
 #define	CGA_MEM_TEST1	1
 #define	CGA_MEM_TEST2	1
@@ -376,6 +380,141 @@ void cga_video_test3(void) {
 }
 #endif
 
+#if (CGA_VIDEO_TEST == CGA_TEST_VIDEOFX_DYNPALETTE)
+void cga_video_test4(void) {
+	char *text1 = "Hello, Habr!";
+	char *text2 = "Here're some special video effects for ya.";
+	char *text3 = "Press KEY1 or KEY2 to roll rainbow around.";
+
+	cga_wait_vblank();
+
+	cga_fill_screen(0); // clear screen
+
+	cga_text_print(CGA->FB, (CGA_TEXT_WIDTH - strlen(text1)) / 2, 13, 1, 0, text1);
+	cga_text_print(CGA->FB, (CGA_TEXT_WIDTH - strlen(text2)) / 2, 14, 1, 0, text2);
+	cga_text_print(CGA->FB, (CGA_TEXT_WIDTH - strlen(text3)) / 2, 16, 1, 0, text3);
+}
+#endif
+
+#if (CGA_VIDEO_TEST == CGA_TEST_VIDEOFX_HYBRID)
+static unsigned char *videobuf_for_text = (unsigned char*)0x90001000;
+static unsigned char *videobuf_for_graphics = (unsigned char*)0x90006000;
+
+void cga_video_test5(void) {
+
+	char *lorem_ipsum = 
+		ESC_FG "1;" "Lorem ipsum" ESC_FG "15;" " dolor sit amet, consectetur adipiscing elit, "
+		"sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim "
+		"veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. "
+		"Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat "
+		"nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia "
+		"deserunt mollit anim id est laborum.\r\n\n\t\t"
+		ESC_FG "4;"
+			"+------------------------------------+" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"|                                    |" ESC_DOWN "1;" ESC_LEFT "38;"
+			"+------------------------------------+\r\n\n" ESC_FG "15;" ESC_BG "3;"
+		"Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots "
+		"in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard "
+		"McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the "
+		"more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the "
+		"cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum "
+		"comes from sections 1.10.32 and 1.10.33 of \"" ESC_FG "1;" "de Finibus Bonorum et Malorum" 
+		ESC_FG "15;" "\" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a "
+		"treatise on the theory of ethics, very popular during the Renaissance. The first line of "
+		"Lorem Ipsum, \"Lorem ipsum dolor sit amet..\", comes from a line in section 1.10.32.";
+
+	memset(videobuf_for_text, 0, 20*1024);
+	cga_text_print(videobuf_for_text, 0,  0, 15, 0, lorem_ipsum);
+
+
+	memset(videobuf_for_graphics, 0, 20*1024);
+
+	for(int y = 64; y < 128; y += 16)
+		for(int x = 68; x < 212; x += 16)
+			cga_bitblit((uint8_t*)cga_sprites[(_sprite_idx) % 11], videobuf_for_graphics, x, y, 16, 16,
+				CGA_VIDEO_WIDTH, CGA_VIDEO_HEIGHT);
+
+	_sprite_idx++;
+}
+#endif
+
+#if (CGA_VIDEO_TEST == CGA_TEST_DEMO)
+static unsigned char *videobuf_for_text = (unsigned char*)0x90001000;
+static unsigned char *videobuf_for_graphics = (unsigned char*)0x90006000;
+
+float my_sine(float x)
+{
+	
+	x = ((int)(x * 57.297469) % 360) * 0.017452; // fmod(x, 2*PI)
+
+	float res = 0, pow = x, fact = 1;
+
+	for(int i = 0; i < 5; ++i) {
+		res+=pow/fact;
+		pow*=-1*x*x;
+		fact*=(2*(i+1))*(2*(i+1)+1);
+	}
+	return res;
+}
+
+void cga_video_demo(void) {
+
+	char *greetings = 
+		ESC_FG "5;"
+		"\t\tGreetings to all users of Habr!\r\n"
+		"\n"
+		"\tHope you  enjoyed  reading  my post on  developing  CGA-like  video\r\n"
+		"\tsubsystem for  FPGA  based synthesizable microcontroller  and liked\r\n"
+		"\tthe VFXs demoed.\r\n"
+		"\n"
+		"\tThis work was inspired by those few who proceed coding for resource\r\n"
+		"\tscarse systems  gaining  impossible  from them  using minuscule yet\r\n"
+		"\tpowerful handcrafted tools.\r\n"
+		"\n"
+		"\t\tKudos to you dear old-time hacker fellows!\r\n"
+		"\n"
+		"\n"
+		"\t\tSpecial credits to:\r\n"
+		"\t\t===================\r\n"
+		"\t" ESC_FG "14;" "Yuri Panchul" ESC_FG "5; for his work on basics-graphics-music Verilog labs\r\n"
+		"\t" ESC_FG "14;" "Dmitry Petrenko" ESC_FG "5; for inspirations and ideas for Karnix FPGA board\r\n"
+		"\t" ESC_FG "14;" "Vitaly Maltsev" ESC_FG "5; for helping with bitblit code optimization\r\n"
+		"\t" ESC_FG "14;" "Victor Sergeev" ESC_FG "5; for demoscene inpirations\r\n"
+		"\t" ESC_FG "14;" "Evgeny Korolenko" ESC_FG "5; for editing and testing\r\n"
+		"\n"
+		"\t\tThanks:\r\n"
+		"\t\t=======\r\n"
+		"\n"
+		"\t" ESC_FG "14;" "@Manwe_Sand" ESC_FG "5; for his Good Apple for BK-0011M and other BK-0010 stuff\r\n"
+		"\t" ESC_FG "14;" "@KeisN13" ESC_FG "5; for organizing FPGAs community in Russia\r\n"
+		"\t" ESC_FG "14;" "@frog" ESC_FG "5; for CC'24 and keeping Russian demoscene running...\r\n"
+		"\n"
+		"\t\t*\t*\t*\n\n\n\n";
+	       
+	memset(videobuf_for_text, 0, 20*1024);
+	cga_text_print(videobuf_for_text, 0,  0, 15, 0, greetings);
+	cga_set_cursor_xy(60, 10);
+
+	memset(videobuf_for_graphics, 0, 20*1024);
+
+	for(int y = 0; y < 240; y += 48)
+		for(int x = 0; x < 320; x += 48)
+			cga_bitblit((uint8_t*)cga_sprites[(_sprite_idx+y) % 11], videobuf_for_graphics,
+				x + 64 * my_sine((x+_sprite_idx)/80.0),
+				y + 64 * my_sine((x+_sprite_idx)/80.0),
+				16, 16, CGA_VIDEO_WIDTH, CGA_VIDEO_HEIGHT);
+
+	_sprite_idx++;
+}
+#endif
+
 void main() {
 
 	unsigned int n;
@@ -401,7 +540,7 @@ void main() {
 	}
 
 	// Below prints global linker variables without using libc
-	// Can be usful for debugging heal allocation issues 
+	// Can be usful for debugging heal _allocation issues 
 
 /*
 	to_hex(str, (unsigned int)&_ram_heap_start);
@@ -631,7 +770,6 @@ void main() {
 
 	csr_set(mstatus, MSTATUS_MIE); // Enable Machine interrupts
 
-
 	// Dispay current Modbus and IP settings
 	if(0) {
 		char txt[32];
@@ -689,17 +827,26 @@ void main() {
 	cga_video_test3();
 	#endif
 
+	#if (CGA_VIDEO_TEST == CGA_TEST_VIDEOFX_DYNPALETTE)
+	cga_video_test4();
+	#endif
+
+	#if (CGA_VIDEO_TEST == CGA_TEST_VIDEOFX_HYBRID)
+	cga_video_test5();
+	#endif
+
+
 	while(1) {
 		int audio_idx = 0;
 
 		GPIO->OUTPUT |= GPIO_OUT_LED1; // ON: LED1 - ready
 
-    		process_and_wait(1000); 
+//    		process_and_wait(1000); 
 
 	       	// OFF: LED1 - ready, LED2 - MAC/MODBUS Error, LED3 - UART I/O
 		GPIO->OUTPUT &= ~(GPIO_OUT_LED1 | GPIO_OUT_LED2 | GPIO_OUT_LED3);
 
-    		process_and_wait(1000); 
+  //  		process_and_wait(1000); 
 
 		if(0) {
 			printf("Build %05d: irqs = %d, sys_cnt = %d, scratch = %p, sbrk_heap_end = %p, "
@@ -784,6 +931,140 @@ void main() {
 		}
 		#endif
 
+		#if CGA_VIDEO_TEST == CGA_TEST_VIDEOFX_TEXTFLIC
+		{
+			uint32_t *fb = (uint32_t*) CGA->FB;
+
+			cga_wait_vblank();
+
+			for(int i = 0; i < 80*5; i++) {
+				fb[80 *  0] = 0x00000131; 
+				fb[80 *  5] = 0x00000232; 
+				fb[80 * 10] = 0x00000333; 
+				fb[80 * 15] = 0x00000134; 
+				fb[80 * 20] = 0x00000235; 
+				fb[80 * 25] = 0x00000336; 
+				fb++;
+			}
+
+			fb = (uint32_t*) CGA->FB;
+
+			cga_wait_vblank();
+
+			for(int i = 0; i < 80*5; i++) {
+				fb[80 *  0] = 0x00000131; 
+				fb[80 *  5] = 0x00000232; 
+				fb[80 * 10] = 0x00000333; 
+				fb[80 * 15] = 0x00000234; 
+				fb[80 * 20] = 0x00000335; 
+				fb[80 * 25] = 0x00000136; 
+				fb++;
+			}
+		}
+		#endif
+
+
+		#if CGA_VIDEO_TEST == CGA_TEST_VIDEOFX_DYNPALETTE 
+		{
+			static uint32_t colorfx_rainbow[] = {
+				// Straight
+				0x000000ff, 0x000055ff, 0x0000aaff, 0x0000ffff,
+				0x0000ffaa, 0x0000ff2a, 0x002bff00, 0x0080ff00,
+				0x00d4ff00, 0x00ffd400, 0x00ffaa00, 0x00ff5500,
+				0x00ff0000, 0x00ff0055, 0x00ff00aa, 0x00ff00ff,
+				// Reversed
+				0x00ff00ff, 0x00ff00aa, 0x00ff0055, 0x00ff0000,
+				0x00ff5500, 0x00ffaa00, 0x00ffd400, 0x00d4ff00,
+				0x0080ff00, 0x002bff00, 0x0000ff2a, 0x0000ffaa,
+				0x0000ffff, 0x0000aaff, 0x000055ff, 0x000000ff,
+			};
+
+			static int colorfx_offset = 6;
+
+			int colorfx_idx = colorfx_offset;
+
+			while(!(CGA->CTRL & CGA_CTRL_VSYNC_FLAG));
+
+			for(int i = 0; i < 525/2; i++) {
+				while(!(CGA->CTRL & CGA_CTRL_HSYNC_FLAG));
+				CGA->PALETTE[1] = colorfx_rainbow[colorfx_idx];
+				colorfx_idx = (colorfx_idx + 1) % 32;
+				while(CGA->CTRL & CGA_CTRL_HSYNC_FLAG);
+
+				while(!(CGA->CTRL & CGA_CTRL_HSYNC_FLAG));
+				while(CGA->CTRL & CGA_CTRL_HSYNC_FLAG);
+			}
+
+			if(GPIO->INPUT & GPIO_IN_KEY1)
+				colorfx_offset++;
+
+			if(GPIO->INPUT & GPIO_IN_KEY2)
+				colorfx_offset--;
+		}
+		#endif
+
+		#if CGA_VIDEO_TEST == CGA_TEST_VIDEOFX_HYBRID 
+		{
+			cga_wait_vblank();
+			cga_set_video_mode(CGA_MODE_TEXT);
+			memcpy(CGA->FB, videobuf_for_text, 20*1024); 
+			cga_wait_vblank_end();
+
+			cga_video_test5();
+
+			cga_wait_vblank();
+			cga_set_video_mode(CGA_MODE_GRAPHICS1);
+			memcpy(CGA->FB, videobuf_for_graphics, 20*1024); 
+			cga_wait_vblank_end();
+		}
+		#endif
+
+
+		#if CGA_VIDEO_TEST == CGA_TEST_DEMO
+		{
+			static int _scroll = 480;
+			static uint32_t colorfx_rainbow[] = {
+				// Straight
+				0x000000ff, 0x000055ff, 0x0000aaff, 0x0000ffff,
+				0x0000ffaa, 0x0000ff2a, 0x002bff00, 0x0080ff00,
+				0x00d4ff00, 0x00ffd400, 0x00ffaa00, 0x00ff5500,
+				0x00ff0000, 0x00ff0055, 0x00ff00aa, 0x00ff00ff,
+				// Reversed
+				0x00ff00ff, 0x00ff00aa, 0x00ff0055, 0x00ff0000,
+				0x00ff5500, 0x00ffaa00, 0x00ffd400, 0x00d4ff00,
+				0x0080ff00, 0x002bff00, 0x0000ff2a, 0x0000ffaa,
+				0x0000ffff, 0x0000aaff, 0x000055ff, 0x000000ff,
+			};
+
+			static int colorfx_offset = 6;
+
+			int colorfx_idx = colorfx_offset;
+
+			cga_wait_vblank();
+			cga_set_video_mode(CGA_MODE_TEXT);
+			cga_set_scroll(_scroll++);
+			memcpy(CGA->FB, videobuf_for_text, 20*1024); 
+			cga_wait_vblank_end();
+
+			for(int i = 0; i < 480/2; i++) {
+				while(!(CGA->CTRL & CGA_CTRL_HSYNC_FLAG));
+				CGA->PALETTE[5] = colorfx_rainbow[colorfx_idx];
+				colorfx_idx = (colorfx_idx + 1) % 32;
+				while(CGA->CTRL & CGA_CTRL_HSYNC_FLAG);
+
+				while(!(CGA->CTRL & CGA_CTRL_HSYNC_FLAG));
+				while(CGA->CTRL & CGA_CTRL_HSYNC_FLAG);
+			}
+
+			cga_wait_vblank();
+			cga_set_video_mode(CGA_MODE_GRAPHICS1);
+			cga_set_scroll(0);
+			memcpy(CGA->FB, videobuf_for_graphics, 20*1024); 
+			cga_wait_vblank_end();
+
+			cga_video_demo();
+		}
+		#endif
 
 		//sram_test_write_shorts();
 		//sram_test_write_random_ints();
