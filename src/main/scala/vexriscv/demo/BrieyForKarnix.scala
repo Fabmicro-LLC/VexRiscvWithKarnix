@@ -24,6 +24,7 @@ import scala.collection.Seq
 import vexriscv.ip.fpu._
 import spinal.lib.blackbox.lattice.ecp5._
 import mylib.{SramLayout, SramInterface, Axi4SharedToSram}
+import mylib.{QSPILayout, QSPIInterface, Axi4SharedToQSPI}
 import mylib.{Pwm,Apb3PwmCtrl}
 import mylib.{Apb3MicroI2CCtrl, MicroI2CInterface}
 import mylib.{HDMIInterface, Apb3CGA4HDMICtrl}
@@ -43,8 +44,8 @@ case class BrieyForKarnixConfig(
                        macConfig : MacEthParameter,
                        uart0CtrlConfig : UartCtrlMemoryMappedConfig,
                        uart1CtrlConfig : UartCtrlMemoryMappedConfig,
-                       spiAudioDACCtrlConfig   : SpiMasterCtrlMemoryMappedConfig,
-                       spi0Config  : SpiMasterCtrlMemoryMappedConfig
+                       spiAudioDACCtrlConfig : SpiMasterCtrlMemoryMappedConfig,
+                       spi0Config : SpiMasterCtrlMemoryMappedConfig
 )
 
 object BrieyForKarnixConfig{
@@ -285,6 +286,7 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     val i2c = MicroI2CInterface()
     val hard_reset = out Bool()
     val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
+    val qspi0 = master(QSPIInterface(QSPILayout(addressWidth = 24, dataWidth = 8)))
     val hdmi = master(HDMIInterface())
     val pixclk_x10 = in Bool()
   }
@@ -346,6 +348,15 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
       dataSRAMWidth = 16
     )
     sram.io.sram <> io.sram
+
+    val qspi0 = Axi4SharedToQSPI(
+      addressAxiWidth = 32,
+      dataWidth    = 32,
+      idWidth      = 4,
+      addressQSPIWidth = 24,
+      dataQSPIWidth = 8 
+    )
+    qspi0.io.qspi <> io.qspi0
 
     val apbBridge = Axi4SharedToApb3Bridge(
       addressWidth = 20,
@@ -454,12 +465,13 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     axiCrossbar.addSlaves(
       ram.io.axi       -> (0x80000000L, onChipRamSize),
       sram.io.axi      -> (0x90000000L, sram.sramLayout.capacity * sram.sramLayout.dataWidth / 8),
+      qspi0.io.axi      -> (0xA0000000L, qspi0.qspiLayout.capacity * qspi0.qspiLayout.dataWidth / 8),
       apbBridge.io.axi -> (0xF0000000L, 1 MB)
     )
 
     axiCrossbar.addConnections(
       core.iBus       -> List(ram.io.axi, sram.io.axi),
-      core.dBus       -> List(ram.io.axi, sram.io.axi, apbBridge.io.axi)
+      core.dBus       -> List(ram.io.axi, sram.io.axi, qspi0.io.axi, apbBridge.io.axi)
       //core.iBus       -> List(ram.io.axi),
       //core.dBus       -> List(ram.io.axi, apbBridge.io.axi)
     )
@@ -479,6 +491,13 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     })
 
     axiCrossbar.addPipelining(sram.io.axi)((crossbar,ctrl) => {
+      crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
+      crossbar.writeData            >/-> ctrl.writeData
+      crossbar.writeRsp              <<  ctrl.writeRsp
+      crossbar.readRsp               <<  ctrl.readRsp
+    })
+
+    axiCrossbar.addPipelining(qspi0.io.axi)((crossbar,ctrl) => {
       crossbar.sharedCmd.halfPipe()  >>  ctrl.sharedCmd
       crossbar.writeData            >/-> ctrl.writeData
       crossbar.writeRsp              <<  ctrl.writeRsp
@@ -559,6 +578,7 @@ case class BrieyForKarnixTopLevel() extends Component{
 	val i2c_sda = inout(Analog(Bool()))
 
         val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
+        val qspi0 = master(QSPIInterface(QSPILayout(addressWidth = 24, dataWidth = 8)))
         val spiAudioDAC = master(SpiMaster(ssWidth = 1))
         val spi0 = master(SpiMaster(ssWidth = 1))
         
@@ -572,10 +592,11 @@ case class BrieyForKarnixTopLevel() extends Component{
         */
 
         val hdmi = master(HDMIInterface())
+
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 60.0 MHz, 
+		axiFrequency = 50.0 MHz, 
 		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
@@ -613,9 +634,9 @@ case class BrieyForKarnixTopLevel() extends Component{
 
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 16, opDiv = 7, opCPhase = 3) ) // 80.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 3, opDiv = 8, opCPhase = 4) ) // 75.0 MHz
-    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
+    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 13, opDiv = 9, opCPhase = 4) ) // 65.0 MHz
-    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 12, opDiv = 10, opCPhase = 4) ) // 60.0 MHz
+    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 12, opDiv = 10, opCPhase = 4) ) // 60.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 6, fbDiv = 15, opDiv = 10, opCPhase = 4) ) // 62.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 3, fbDiv = 7, opDiv = 11, opCPhase = 5) ) // 58.0 MHz
 
@@ -704,6 +725,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     briey.io.sram <> io.sram
     briey.io.spiAudioDAC <> io.spiAudioDAC
     briey.io.spi0 <> io.spi0
+    briey.io.qspi0 <> io.qspi0
 
     io.i2c_scl <> briey.io.i2c.scl
     io.i2c_sda <> briey.io.i2c.sda
