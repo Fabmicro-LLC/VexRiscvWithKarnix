@@ -253,7 +253,7 @@ case class QSPIReadWord32(qspiLayout : QSPILayout) extends Component {
 
 
 object Axi4ToQSPIPhase extends SpinalEnum{
-  val INIT1, INIT2, INIT3, INIT4, SETUP, SPI_CMD_READ, QPI_CMD_READ, QPI_UNSUPPORTED, QPI_CMD_READ_SETUP, QPI_READ, ACCESSLow, ACCESSHigh, RESPONSE = newElement()
+  val INIT1, INIT2, INIT3, INIT4, SETUP, SPI_CMD_READ, QPI_CMD_READ, QPI_UNSUPPORTED, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, RESPONSE = newElement()
 }
 
 object Axi4SharedToQSPI {
@@ -431,7 +431,11 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           qpi_read.io.valid := True
         } otherwise {
           io.qspi.cs := False
-          readData(31 downto 0) := qpi_read.io.data
+          // Revers byte order
+          readData(31 downto 24) := qpi_read.io.data(7 downto 0)
+          readData(23 downto 16) := qpi_read.io.data(15 downto 8)
+          readData(15 downto 8) := qpi_read.io.data(23 downto 16)
+          readData(7 downto 0) := qpi_read.io.data(31 downto 24)
           arw.addr := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
           io.axi.r.valid := True
           when(io.axi.r.ready){
@@ -440,10 +444,16 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
             }otherwise{ // Repeat next beat in the burst
               lenBurst := lenBurst - 1
               qpi_read.io.qspi <> io.qspi
-              qpi_read.io.valid := True
+              qpi_read.io.valid := False
+              phase := QPI_READ_REPEATE
             }
           }
         }
+      }
+      is(QPI_READ_REPEATE){
+          qpi_read.io.qspi <> io.qspi
+          qpi_read.io.valid := True
+          phase := QPI_READ 
       }
       is(SPI_CMD_READ){
         when(!spi_cmd.io.ready) {
@@ -459,47 +469,6 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           qpi_read.io.valid := True
           phase := QPI_READ // Read performed in 4-bit chunks same as in QPI mode
         }
-      }
-      is(ACCESSLow){
-        //io.sram.cs := !True
-        //io.sram.addr := arw.addr.asBits(sramLayout.addressWidth downto 2).asBits ## B"0"
-
-        when(arw.write){
-          //io.sram.we  := !True
-          //io.sram.dat := io.axi.w.data(15 downto 0)
-          //io.sram.ble := !io.axi.w.strb(0)
-          //io.sram.bhe := !io.axi.w.strb(1) 
-        } otherwise {
-          //io.sram.oe  := !True
-          readData(15 downto 0) := U(0xBBFF).asBits(15 downto 0) //io.sram.dat
-        }
-
-        phase := ACCESSHigh 
-      }
-      is(ACCESSHigh){
-        //io.sram.cs := !True
-        //io.sram.addr := arw.addr.asBits(sramLayout.addressWidth downto 2).asBits ## B"1"
-
-        when(arw.write){ // Write High 16 bits
-          //io.sram.we  := !True
-          //io.sram.ble := !io.axi.w.strb(2)
-          //io.sram.bhe := !io.axi.w.strb(3) 
-          //io.sram.dat := io.axi.w.data(31 downto 16)
-        } otherwise { // Read High 16 bits
-          //io.sram.oe  := !True
-          readData(31 downto 16) := U(0xDEAD).asBits(15 downto 0) //io.sram.dat
-        }
-
-        // If read or write, increment beat address
-        when(io.axi.w.valid || !arw.write){
-          arw.addr   := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
-        }
-
-        when(io.axi.w.last || arw.len === 0){
-          phase := RESPONSE
-        }
-
-        io.axi.w.ready   := io.axi.w.valid & arw.write
       }
       default{ // RESPONSE, UNSUPPORTED
         io.axi.b.valid := True
