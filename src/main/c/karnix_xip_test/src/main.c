@@ -18,6 +18,7 @@
 #include "config.h"
 #include "hub.h"
 #include "cga.h"
+#include "crc32.h"
 
 /* Enable CGA test */
 #define	CGA_TEST_NONE			0	// No test, workinig mode
@@ -1096,15 +1097,26 @@ void main() {
 
 		GPIO->OUTPUT &= ~GPIO_OUT_LED0; // LED0 is OFF - clear error indicator
 
-		if(1) {
-			volatile uint32_t *v = (uint32_t*)0xA0800000;
-			int sum = 0;
-			uint32_t t0 = get_mtime();
-			for(int i = 0; i < 1024*1024; i++)
-				sum += *v++;
-			uint32_t t1 = get_mtime();
-			printf("XXX: v = 0x%08x, sum = %d, time = %lu\r\n", v, sum, t1 - t0);
 
+		if(0) {
+			volatile uint8_t* v = (uint8_t*)0xA0800000;
+			/*
+			for(int i = 0; i < 10; i++) {
+				printf("X[0x%08x]: 0x%02x\r\n", v, *v);
+				v++;
+			}
+			*/
+
+			// CRC32 params as in "cksum -o 3" (CRC-32/PKZIP/ISO-HDLC)
+			//uint32_t crc = crc32((const void*)0xA0800000, 8*1024*1024, 0x00000000, 0xEDB88320);
+			//printf("NOR: CRC32 = 0x%08x\r\n", crc);
+
+			uint32_t crc = 0;
+			uint32_t t0 = get_mtime();
+			for(int i = 0; i < 8*1024*1024/4; i++)
+				crc += v[i];
+			uint32_t t1 = get_mtime();
+			printf("NOR: Sum = 0x%08x, dT = %d\r\n", crc, t1-t0);
 		}
 	}
 }
