@@ -286,7 +286,7 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     val i2c = MicroI2CInterface()
     val hard_reset = out Bool()
     val sram = master(SramInterface(SramLayout(addressWidth = 18, dataWidth = 16)))
-    val qspi0 = master(QSPIInterface(QSPILayout(addressWidth = 24, dataWidth = 8)))
+    val qspi0 = master(QSPIInterface(QSPILayout(addressWidth = 22, dataWidth = 32)))
     val hdmi = master(HDMIInterface())
     val pixclk_x10 = in Bool()
   }
@@ -353,8 +353,8 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
       addressAxiWidth = 32,
       dataWidth    = 32,
       idWidth      = 4,
-      addressQSPIWidth = 24,
-      dataQSPIWidth = 8 
+      addressQSPIWidth = 22,
+      dataQSPIWidth = 32 
     )
     qspi0.io.qspi <> io.qspi0
 
@@ -465,15 +465,13 @@ class BrieyForKarnix(val config: BrieyForKarnixConfig) extends Component{
     axiCrossbar.addSlaves(
       ram.io.axi       -> (0x80000000L, onChipRamSize),
       sram.io.axi      -> (0x90000000L, sram.sramLayout.capacity * sram.sramLayout.dataWidth / 8),
-      qspi0.io.axi      -> (0xA0000000L, qspi0.qspiLayout.capacity * qspi0.qspiLayout.dataWidth / 8),
+      qspi0.io.axi     -> (0xA0000000L, qspi0.qspiLayout.capacity * qspi0.qspiLayout.dataWidth / 8),
       apbBridge.io.axi -> (0xF0000000L, 1 MB)
     )
 
     axiCrossbar.addConnections(
-      core.iBus       -> List(ram.io.axi, sram.io.axi),
+      core.iBus       -> List(ram.io.axi, sram.io.axi, qspi0.io.axi),
       core.dBus       -> List(ram.io.axi, sram.io.axi, qspi0.io.axi, apbBridge.io.axi)
-      //core.iBus       -> List(ram.io.axi),
-      //core.dBus       -> List(ram.io.axi, apbBridge.io.axi)
     )
 
     axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar,bridge) => {
@@ -596,7 +594,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 50.0 MHz, 
+		axiFrequency = 58.2 MHz, 
 		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
@@ -634,11 +632,11 @@ case class BrieyForKarnixTopLevel() extends Component{
 
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 16, opDiv = 7, opCPhase = 3) ) // 80.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 3, opDiv = 8, opCPhase = 4) ) // 75.0 MHz
-    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
+    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 1, fbDiv = 2, opDiv = 12, opCPhase = 5) ) // 50.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 13, opDiv = 9, opCPhase = 4) ) // 65.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 5, fbDiv = 12, opDiv = 10, opCPhase = 4) ) // 60.0 MHz
     //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 6, fbDiv = 15, opDiv = 10, opCPhase = 4) ) // 62.0 MHz
-    //val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 3, fbDiv = 7, opDiv = 11, opCPhase = 5) ) // 58.0 MHz
+    val core_pll = new EHXPLLL( EHXPLLLConfig(clkiFreq = 25.0 MHz, mDiv = 3, fbDiv = 7, opDiv = 11, opCPhase = 5) ) // 58.0 MHz
 
 
     core_pll.io.CLKI := io.clk25
@@ -736,6 +734,122 @@ case class BrieyForKarnixTopLevel() extends Component{
 object BrieyForKarnixVerilog{
   def main(args: Array[String]) {
     SpinalVerilog(BrieyForKarnixTopLevel().setDefinitionName("BrieyForKarnixTopLevel"))
+  }
+}
+
+
+
+import spinal.sim._
+import spinal.core.sim._
+
+object BrieyForKarnixSim {
+  def main(args: Array[String]) {
+
+    SimConfig.addRtl("src/main/verilog/TMDS_encoder.sv")
+             .addRtl("src/main/verilog/OBUFDS.sv")
+             .addRtl("/home/rz/RISCV/yosys/techlibs/ecp5/cells_bb.v")
+             .withWave.compile{
+      val dut = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
+              axiFrequency= 50 MHz,
+              onChipRamSize = 72 kB ,
+              onChipRamHexFile = "src/main/c/karnix_xip_test/build/karnix_xip_test.hex"
+      )) 
+
+      dut.io.asyncReset.simPublic()
+      dut.io.mainClk.simPublic()
+      dut.axi.core.cpu.lastStageInstruction.simPublic()
+      dut.axi.core.cpu.lastStagePc.simPublic()
+      dut.axi.core.cpu.decode.arbitration.isValid.simPublic()
+      dut.axi.core.cpu.decode.arbitration.haltItself.simPublic()
+      dut.axi.core.cpu.decode.arbitration.haltByOther.simPublic()
+      dut.axi.core.cpu.execute.arbitration.isValid.simPublic()
+      dut.axi.core.cpu.execute.arbitration.haltItself.simPublic()
+      dut.axi.core.cpu.execute.arbitration.haltByOther.simPublic()
+      dut.axi.core.cpu.memory.arbitration.isValid.simPublic()
+      dut.axi.core.cpu.memory.arbitration.haltItself.simPublic()
+      dut.axi.core.cpu.memory.arbitration.haltByOther.simPublic()
+      dut.axi.core.cpu.writeBack.arbitration.isValid.simPublic()
+      dut.axi.core.cpu.writeBack.arbitration.haltItself.simPublic()
+      dut.axi.core.cpu.writeBack.arbitration.haltByOther.simPublic()
+      dut.axi.qspi0.io.axi.arw.addr.simPublic()
+      dut.axi.qspi0.io.axi.arw.write.simPublic()
+      dut.axi.qspi0.io.axi.arw.valid.simPublic()
+      dut.axi.qspi0.io.axi.arw.ready.simPublic()
+      dut.axi.qspi0.io.axi.r.valid.simPublic()
+      dut.axi.qspi0.io.axi.r.ready.simPublic()
+      dut.axi.qspi0.io.axi.r.data.simPublic()
+      dut.axi.qspi0.io.axi.w.valid.simPublic()
+      dut.axi.qspi0.io.axi.w.ready.simPublic()
+      dut.axi.qspi0.io.axi.r.data.simPublic()
+      dut.axi.qspi0.arw.addr.simPublic()
+      dut.axi.qspi0.arw.len.simPublic()
+      dut.axi.qspi0.arw.size.simPublic()
+      dut.axi.qspi0.lenBurst.simPublic()
+      dut.axi.qspi0.phase.simPublic()
+
+      /*
+
+  io.axi.arw.ready  := False
+  io.axi.w.ready    := False
+  io.axi.b.valid    := False
+  io.axi.b.resp     := Axi4.resp.OKAY
+  io.axi.b.id       := arw.id
+  io.axi.r.valid    := False
+  io.axi.r.resp     := Axi4.resp.OKAY
+  io.axi.r.id       := arw.id
+  io.axi.r.data     := readData
+  io.axi.r.last     := isEndBurst && !arw.write
+
+       */
+      dut
+
+    }.doSim { 
+
+      dut =>
+
+      // Create our own clock domain using external signals mainClk and asyncReset
+      val myClockDomain = ClockDomain(dut.io.mainClk, dut.io.asyncReset)
+
+      // Fork process that drives our clock
+      myClockDomain.forkStimulus(period = 10)
+
+      // We are in reset state at the beginning
+      myClockDomain.assertReset()
+
+      // Simulate next 1k clock cycles
+      for(idx <- 0 to 99999) {
+    
+        if(idx > 1) { myClockDomain.deassertReset() }
+
+        myClockDomain.waitRisingEdge()
+
+        if(dut.axi.qspi0.io.axi.arw.valid.toBoolean ||
+           dut.axi.qspi0.io.axi.r.valid.toBoolean ||
+           dut.axi.qspi0.io.axi.r.ready.toBoolean ||
+           dut.axi.qspi0.io.axi.arw.ready.toBoolean ||
+           dut.axi.qspi0.io.axi.w.valid.toBoolean)
+           {
+
+            println("[cycle: %8d, pc: %08x, instr: %08x]\r\nqspi0: arw.valid = %s, arw.ready = %s, axi.r.valid = %s, axi.r.ready = %s, arw.write = %s, io.arw.addr = %08x/%08x, arw.len = %08x, arw.size = %08x, lenBurst = %08x, phase = %d, r.data = %08x".format(
+              idx,
+              dut.axi.core.cpu.lastStagePc.toLong,
+              dut.axi.core.cpu.lastStageInstruction.toLong,
+              dut.axi.qspi0.io.axi.arw.valid.toBoolean,
+              dut.axi.qspi0.io.axi.arw.ready.toBoolean,
+              dut.axi.qspi0.io.axi.r.valid.toBoolean,
+              dut.axi.qspi0.io.axi.r.ready.toBoolean,
+              dut.axi.qspi0.io.axi.arw.write.toBoolean,
+              dut.axi.qspi0.io.axi.arw.addr.toLong,
+              dut.axi.qspi0.arw.addr.toLong,
+              dut.axi.qspi0.arw.len.toLong,
+              dut.axi.qspi0.arw.size.toLong,
+              dut.axi.qspi0.lenBurst.toLong,
+              dut.axi.qspi0.phase.toBigInt,
+              dut.axi.qspi0.io.axi.r.data.toLong
+            ))
+        }
+      }
+    }
   }
 }
 

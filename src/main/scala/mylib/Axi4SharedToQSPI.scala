@@ -253,7 +253,7 @@ case class QSPIReadWord32(qspiLayout : QSPILayout) extends Component {
 
 
 object Axi4ToQSPIPhase extends SpinalEnum{
-  val INIT1, INIT2, INIT3, INIT4, SETUP, SPI_CMD_READ, QPI_CMD_READ, QPI_UNSUPPORTED, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, RESPONSE = newElement()
+  val INIT1, INIT2, INIT3, INIT4, SETUP, WRITE_SKIP, SPI_CMD_READ, QPI_CMD_READ, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, QPI_READ_RESPONSE, RESPONSE = newElement()
 }
 
 object Axi4SharedToQSPI {
@@ -298,9 +298,6 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
   val phase      = RegInit(INIT1)
   val lenBurst   = Reg(cloneOf(io.axi.arw.len))
   val arw        = Reg(cloneOf(io.axi.arw.payload))
-//  val readData   = Reg(cloneOf(io.axi.r.data)) init(U(0x01020304).asBits.resize(32))
-  val readData   = cloneOf(io.axi.r.data)
-  val addr       = Reg(cloneOf(io.axi.arw.payload.addr))
 
   def isEndBurst = lenBurst === 0
 
@@ -312,13 +309,12 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
   io.axi.r.valid    := False
   io.axi.r.resp     := Axi4.resp.OKAY
   io.axi.r.id       := arw.id
-  io.axi.r.data     := readData
+//  io.axi.r.data     := readData
+  io.axi.r.data     := 0
   io.axi.r.last     := isEndBurst && !arw.write
 
   io.qspi.cs := True 
   io.qspi.sclk := False 
-
-  readData := 0
 
   val spi_send = new QSPISendSPI(qspiLayout)
   spi_send.io.valid := False 
@@ -344,7 +340,7 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
 
   val sm = new Area {
     switch(phase){
-      is(INIT1){
+      is (INIT1) {
         spi_send.io.qspi <> io.qspi
         spi_send.io.data := 0x50 // Set Write Enable bit to alow writes to Status Regs
         spi_send.io.len_bits := 8 - 1
@@ -353,7 +349,7 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := INIT2 
         }
       }
-      is(INIT2){
+      is (INIT2) {
         spi_send.io.qspi <> io.qspi
         // Below settings are for QPI mode which is not good for FPGAs: QPI blocks bitstream read
         // Status Reg-1 and 2: (SRP0:0, SEC:0, TB:1, BP2-0:011, WEL/BUSY:00)
@@ -365,7 +361,7 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := INIT3 
         }
       }
-      is(INIT3){
+      is (INIT3) {
         spi_send.io.qspi <> io.qspi
         spi_send.io.data := 0x04 // Write Disable
         spi_send.io.len_bits := 8 - 1
@@ -375,7 +371,7 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := SETUP // Stay in SPI mode 
         }
       }
-      is(INIT4){
+      is (INIT4) {
         spi_send.io.qspi <> io.qspi
         spi_send.io.data := 0x38 // Switch to QPI mode 
         spi_send.io.len_bits := 8 - 1 
@@ -384,21 +380,37 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := SETUP
         }
       }
-      is(SETUP){
+      is (SETUP) {
         arw       := io.axi.arw
         lenBurst  := io.axi.arw.len
-        when(io.axi.arw.valid){
-          addr := arw.addr
+        when(io.axi.arw.valid) {
+          //addr := arw.addr
           io.axi.arw.ready := True // address accepted
-          when(arw.write) {
-            phase := QPI_UNSUPPORTED
+          when(io.axi.arw.write) {
+            phase := WRITE_SKIP 
+            io.qspi.sclk := False 
+            io.qspi.cs := False
+            io.qspi.io0 := True 
           } otherwise {
             //phase := QPI_CMD_READ_SETUP 
             phase := SPI_CMD_READ
           }
         }
       }
-      is(QPI_CMD_READ_SETUP){
+      is (WRITE_SKIP) {
+        io.qspi.sclk := True //!ClockDomain.current.readClockWire
+        io.qspi.cs := False
+        io.axi.w.ready := io.axi.w.valid & arw.write
+        // If write, increment beat address
+        when(io.axi.w.valid) {
+          arw.addr   := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
+        }
+        //when(io.axi.w.last || arw.len === 0) {
+        when(io.axi.w.last) {
+          phase := RESPONSE
+        }
+      }
+      is (QPI_CMD_READ_SETUP){
         when(!qpi_cmd.io.ready) {
           qpi_cmd.io.qspi <> io.qspi
           qpi_cmd.io.data := U(0xC033) // Send "QPI Set Read params: 8 dummy bits" 
@@ -410,10 +422,10 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := QPI_CMD_READ
         }
       }
-      is(QPI_CMD_READ){
+      is (QPI_CMD_READ){
         when(!qpi_cmd.io.ready) {
           qpi_cmd.io.qspi <> io.qspi
-          qpi_cmd.io.data := (U(0xEB) ## addr.resize(24)).asUInt // Send "Fast Read Quad I/O I" 
+          qpi_cmd.io.data := (U(0xEB) ## arw.addr(23 downto 0)).asUInt // Send "Fast Read Quad I/O I" 
           qpi_cmd.io.len_cycles := 8 - 1 // 32 bits holding cmd and address 
           qpi_cmd.io.m_bits_present := True // Send dummy bits 
           qpi_cmd.io.m_bits := 8 - 1 //8 dummy bits at 104 MHz 
@@ -425,32 +437,46 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := QPI_READ
         }
       }
-      is(QPI_READ){
+      is (QPI_READ){
         when(!qpi_read.io.ready) {
           qpi_read.io.qspi <> io.qspi
           qpi_read.io.valid := True
         } otherwise {
           io.qspi.cs := False
           // Revers byte order
-          readData(31 downto 24) := qpi_read.io.data(7 downto 0)
-          readData(23 downto 16) := qpi_read.io.data(15 downto 8)
-          readData(15 downto 8) := qpi_read.io.data(23 downto 16)
-          readData(7 downto 0) := qpi_read.io.data(31 downto 24)
-          arw.addr := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
-          io.axi.r.valid := True
-          when(io.axi.r.ready){
-            when(isEndBurst){
-              phase := SETUP
-            }otherwise{ // Repeat next beat in the burst
-              lenBurst := lenBurst - 1
-              qpi_read.io.qspi <> io.qspi
-              qpi_read.io.valid := False
-              phase := QPI_READ_REPEATE
-            }
+          //readData(31 downto 24) := qpi_read.io.data(7 downto 0)
+          //readData(23 downto 16) := qpi_read.io.data(15 downto 8)
+          //readData(15 downto 8) := qpi_read.io.data(23 downto 16)
+          //readData(7 downto 0) := qpi_read.io.data(31 downto 24)
+
+          // For debug: always return "C.JR X1" (RET) opcode 
+          //readData(31 downto 24) := 0x80
+          //readData(23 downto 16) := 0x82
+          //readData(15 downto 8) := 0x80
+          //readData(7 downto 0) := 0x82
+          phase := QPI_READ_RESPONSE
+        }
+      }
+      is (QPI_READ_RESPONSE){
+        io.qspi.cs := False
+        io.axi.r.valid := True
+        io.axi.r.data(31 downto 24) := qpi_read.io.data(7 downto 0)
+        io.axi.r.data(23 downto 16) := qpi_read.io.data(15 downto 8)
+        io.axi.r.data(15 downto 8) := qpi_read.io.data(23 downto 16)
+        io.axi.r.data(7 downto 0) := qpi_read.io.data(31 downto 24)
+        when(io.axi.r.ready){
+          when(isEndBurst){
+            phase := SETUP
+          }otherwise{ // Repeat next beat in the burst
+            arw.addr := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
+            lenBurst := lenBurst - 1
+            qpi_read.io.qspi <> io.qspi
+            qpi_read.io.valid := False
+            phase := QPI_READ_REPEATE
           }
         }
       }
-      is(QPI_READ_REPEATE){
+      is (QPI_READ_REPEATE){
           qpi_read.io.qspi <> io.qspi
           qpi_read.io.valid := True
           phase := QPI_READ 
@@ -458,7 +484,7 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
       is(SPI_CMD_READ){
         when(!spi_cmd.io.ready) {
           spi_cmd.io.qspi <> io.qspi
-          spi_cmd.io.data := (U(0x6B).resize(8) ## addr.resize(24)).asUInt // Send "Fast Read Quad Output" 
+          spi_cmd.io.data := (U(0x6B).resize(8) ## arw.addr(23 downto 0)).asUInt // Send "Fast Read Quad Output" 
           spi_cmd.io.len_cycles := 32 - 1 // 32 bits holding cmd and address 
           spi_cmd.io.m_bits_present := True // Send dummy bits 
           spi_cmd.io.m_bits := 8 - 1 //8 dummy bits for SPI Quad mode 
@@ -470,10 +496,17 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := QPI_READ // Read performed in 4-bit chunks same as in QPI mode
         }
       }
-      default{ // RESPONSE, UNSUPPORTED
-        io.axi.b.valid := True
-        io.axi.w.ready := True //io.axi.w.valid & arw.write
-        phase := SETUP
+      default { // RESPONSE, UNSUPPORTED
+        when(arw.write){
+          io.axi.b.valid := True
+          io.axi.w.ready := io.axi.w.valid & arw.write
+          when(io.axi.b.ready){
+            phase := SETUP
+          }
+        } otherwise {
+          io.axi.r.valid := True // Read OK
+          phase := SETUP
+        }
       }
 
     }

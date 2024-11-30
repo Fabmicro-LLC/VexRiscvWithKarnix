@@ -516,6 +516,28 @@ void cga_video_demo(void) {
 }
 #endif
 
+void test_nor_xip(void) {
+
+	volatile uint32_t* v = (uint32_t*)0xA0800000;
+	//volatile uint32_t* v = (uint32_t*)0x90001000;
+	//volatile uint32_t* v = (uint32_t*)0x90800000;
+	//for(int i = 0; i < 100*1024; i++)
+	//	v[i] = 0x80828082;
+	//v[0] = 0x80828082;
+	while(1) {
+			//printf("NOR: [0x%08X] = %02X %02X %02X %02X, 0x%08X\r\n", v, v[0], v[1], v[2], v[3], *(uint32_t*)v);
+			void (*test)(void) = (void (*)(void)) v;
+			uint32_t a = *v;
+			//printf("NOR: test = 0x%08X, a = 0x%08x\r\n", (void*)test, a);
+			uint32_t t0 = get_mtime();
+			test();
+			uint32_t t1 = get_mtime();
+			printf("NOR: execute = 0x%08x, *v = 0x%08x, dT = %d\r\n", test, a, t1-t0);
+			//v++;
+	}
+}
+
+
 void main() {
 
 	unsigned int n;
@@ -528,10 +550,11 @@ void main() {
 
 	csr_clear(mstatus, MSTATUS_MIE); // Disable Machine interrupts during hardware init
 
-
 	init_sbrk(NULL, 0); // Initialize heap for malloc to use on-chip RAM
 
-	delay_us(2000000); // Allow user to connect to debug uart
+	delay_us(2000000); // Wait for FCLK to settle
+
+	test_nor_xip();
 
 	if(deadbeef != 0) {
 		print("Soft-start, performing hard reset!\r\n");
@@ -570,11 +593,7 @@ void main() {
 	print("\r\n");
 */
 
-	printf("\r\n"
-		"Karnix ASB-254 test prog. Build %05d, date/time: " __DATE__ " " __TIME__ "\r\n"
-		"Copyright (C) 2021-2024 Fabmicro, LLC., Tyumen, Russia.\r\n\r\n",
-		BUILD_NUMBER
-	);
+
 
 	GPIO->OUTPUT |= GPIO_OUT_LED0; // LED0 is ON - indicate we are not yet ready
 
@@ -1098,7 +1117,7 @@ void main() {
 		GPIO->OUTPUT &= ~GPIO_OUT_LED0; // LED0 is OFF - clear error indicator
 
 
-		if(0) {
+		if(1) {
 			volatile uint8_t* v = (uint8_t*)0xA0800000;
 			/*
 			for(int i = 0; i < 10; i++) {
@@ -1111,12 +1130,23 @@ void main() {
 			//uint32_t crc = crc32((const void*)0xA0800000, 8*1024*1024, 0x00000000, 0xEDB88320);
 			//printf("NOR: CRC32 = 0x%08x\r\n", crc);
 
+			/*
 			uint32_t crc = 0;
 			uint32_t t0 = get_mtime();
 			for(int i = 0; i < 8*1024*1024/4; i++)
 				crc += v[i];
 			uint32_t t1 = get_mtime();
 			printf("NOR: Sum = 0x%08x, dT = %d\r\n", crc, t1-t0);
+			*/
+			//v = (uint8_t*)0x90001000;
+			//*(uint32_t*)v = 0x80828082;
+			printf("NOR: [0x%08X] = %02X %02X %02X %02X, 0x%08X\r\n", v, v[0], v[1], v[2], v[3], *(uint32_t*)v);
+			void (*test)(void) = (void (*)(void)) v;
+			printf("NOR: test = 0x%08X\r\n", (void*)test);
+			uint32_t t0 = get_mtime();
+			test();
+			uint32_t t1 = get_mtime();
+			printf("NOR: execute = 0x%08x, dT = %d\r\n", test, t1-t0);
 		}
 	}
 }
@@ -1194,17 +1224,22 @@ void externalInterrupt(void){
 
 
 static char crash_str[16];
+static uint32_t pc;
 
 void crash(int cause) {
 	
-
-
 	print("\r\n*** TRAP: ");
 	to_hex(crash_str, cause);
 	print(crash_str);
 	print(" at ");
 
-	to_hex(crash_str, csr_read(mepc));
+	pc = csr_read(mepc);
+
+	to_hex(crash_str, pc);
+	print(crash_str);
+	print(" = ");
+
+	to_hex(crash_str, *(uint32_t*)pc);
 	print(crash_str);
 	print("\r\n");
 
