@@ -3,6 +3,7 @@ package mylib
 import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba4.axi.{Axi4, Axi4Shared, Axi4Config}
+import spinal.lib.bus.amba3.apb.{Apb3, Apb3Config, Apb3SlaveFactory}
 
 case class QSPILayout(addressWidth: Int, dataWidth : Int){
   def bytePerWord = dataWidth/8
@@ -253,7 +254,7 @@ case class QSPIReadWord32(qspiLayout : QSPILayout) extends Component {
 
 
 object Axi4ToQSPIPhase extends SpinalEnum{
-  val INIT1, INIT2, INIT3, INIT4, SETUP, WRITE_SKIP, SPI_CMD_READ, QPI_CMD_READ, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, QPI_READ_RESPONSE, RESPONSE = newElement()
+  val INIT1, INIT2, INIT3, INIT4, SETUP, WRITE_SKIP, SPI_CMD_READ, QPI_CMD_READ, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, QPI_READ_RESPONSE, RESPONSE, SPI_CMD_ERASE4K, SPI_CMD_ERASE4K_WEL = newElement()
 }
 
 object Axi4SharedToQSPI {
@@ -292,8 +293,15 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
 
   val io = new Bundle{
     val axi  = slave (Axi4Shared(axiConfig))
+    val apb  = slave(Apb3(addressWidth = 16, dataWidth = dataWidth))
     val qspi = master(QSPIInterface(qspiLayout))
   }
+
+  val busCtrl = Apb3SlaveFactory(io.apb)
+  val qspiCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 0) init(0)
+  val qspiCtrlWriteEnable = qspiCtrlWord(31)
+  val qspiEraseSector = busCtrl.createReadAndWrite(Bits(32 bits), address = 4)
+  val qspiEraseFlag = io.apb.PENABLE && io.apb.PSEL(0) && io.apb.PADDR === 4 && io.apb.PWRITE 
 
   val phase      = RegInit(INIT1)
   val lenBurst   = Reg(cloneOf(io.axi.arw.len))
@@ -395,6 +403,30 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
             //phase := QPI_CMD_READ_SETUP 
             phase := SPI_CMD_READ
           }
+        } otherwise {
+          when(qspiEraseFlag) {
+            phase := SPI_CMD_ERASE4K_WEL // Erase set WEL
+          }
+        }
+      }
+      is(SPI_CMD_ERASE4K_WEL){
+        when(!spi_cmd.io.ready) {
+          spi_cmd.io.qspi <> io.qspi
+          spi_cmd.io.data := U(0x06)
+          spi_cmd.io.len_cycles := 8 - 1 // 8 bits holding cmd
+          spi_cmd.io.valid := True 
+        } otherwise {
+          phase := SPI_CMD_ERASE4K // Go to Erase 4K block cycle
+        }
+      }
+      is(SPI_CMD_ERASE4K){
+        when(!spi_cmd.io.ready) {
+          spi_cmd.io.qspi <> io.qspi
+          spi_cmd.io.data := (U(0x20).resize(8) ## qspiEraseSector(23 downto 0)).asUInt // Send "Sector Erase" 
+          spi_cmd.io.len_cycles := 32 - 1 // 32 bits holding cmd and sector address
+          spi_cmd.io.valid := True 
+        } otherwise {
+          phase := SETUP
         }
       }
       is (WRITE_SKIP) {
