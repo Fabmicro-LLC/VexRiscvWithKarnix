@@ -19,6 +19,7 @@
 #include "hub.h"
 #include "cga.h"
 #include "crc32.h"
+#include "qspi.h"
 
 /* Enable CGA test */
 #define	CGA_TEST_NONE			0	// No test, workinig mode
@@ -516,6 +517,14 @@ void cga_video_demo(void) {
 }
 #endif
 
+void test_nor_erase(void) {
+	uint32_t erase_addr = 0x00ffffff; // last byte in NOR flash
+	printf("Erasing NOR sector: %d\r\n", erase_addr >> 12);
+	qspi_erase_sector(erase_addr); 
+	delay_us(1000000);
+}
+
+
 void test_nor_xip(void) {
 
 	volatile uint32_t* v = (uint32_t*)0xA0800000;
@@ -553,6 +562,8 @@ void main() {
 	init_sbrk(NULL, 0); // Initialize heap for malloc to use on-chip RAM
 
 	delay_us(2000000); // Wait for FCLK to settle
+
+	test_nor_erase();
 
 	test_nor_xip();
 

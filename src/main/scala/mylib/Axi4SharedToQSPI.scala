@@ -293,15 +293,17 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
 
   val io = new Bundle{
     val axi  = slave (Axi4Shared(axiConfig))
-    val apb  = slave(Apb3(addressWidth = 16, dataWidth = dataWidth))
+    val apb  = slave(Apb3(addressWidth = 8, dataWidth = 32))
     val qspi = master(QSPIInterface(qspiLayout))
   }
 
   val busCtrl = Apb3SlaveFactory(io.apb)
   val qspiCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 0) init(0)
-  val qspiCtrlWriteEnable = qspiCtrlWord(31)
+  val qspiCtrlWriteEnabled = qspiCtrlWord(31)
+  val qspiCtrlCMDErase = qspiCtrlWord(30)
   val qspiEraseSector = busCtrl.createReadAndWrite(Bits(32 bits), address = 4)
-  val qspiEraseFlag = io.apb.PENABLE && io.apb.PSEL(0) && io.apb.PADDR === 4 && io.apb.PWRITE 
+  //val qspiAccessFlag = io.apb.PENABLE && io.apb.PSEL(0) && io.apb.PADDR === 0 
+  val qspiAccessFlag = io.apb.PENABLE && io.apb.PSEL(0) 
 
   val phase      = RegInit(INIT1)
   val lenBurst   = Reg(cloneOf(io.axi.arw.len))
@@ -404,8 +406,10 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
             phase := SPI_CMD_READ
           }
         } otherwise {
-          when(qspiEraseFlag) {
+          when(qspiCtrlCMDErase && qspiCtrlWriteEnabled) {
             phase := SPI_CMD_ERASE4K_WEL // Erase set WEL
+            qspiCtrlCMDErase := False 
+            qspiCtrlWriteEnabled := False
           }
         }
       }

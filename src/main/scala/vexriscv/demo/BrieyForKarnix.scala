@@ -751,7 +751,7 @@ object BrieyForKarnixSim {
              .addRtl("/home/rz/RISCV/yosys/techlibs/ecp5/cells_bb.v")
              .withWave.compile{
       val dut = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-              axiFrequency= 50 MHz,
+              axiFrequency= 60 MHz,
               onChipRamSize = 72 kB ,
               onChipRamHexFile = "src/main/c/karnix_xip_test/build/karnix_xip_test.hex"
       )) 
@@ -787,6 +787,13 @@ object BrieyForKarnixSim {
       dut.axi.qspi0.arw.size.simPublic()
       dut.axi.qspi0.lenBurst.simPublic()
       dut.axi.qspi0.phase.simPublic()
+      dut.axi.qspi0.qspiCtrlWord.simPublic()
+      dut.axi.qspi0.qspiEraseSector.simPublic()
+      dut.axi.qspi0.qspiAccessFlag.simPublic()
+      dut.axi.qspi0.io.apb.PADDR.simPublic()
+      dut.axi.qspi0.io.apb.PWDATA.simPublic()
+      dut.axi.qspi0.io.apb.PENABLE.simPublic()
+      dut.axi.qspi0.io.apb.PWRITE.simPublic()
 
       /*
 
@@ -818,20 +825,24 @@ object BrieyForKarnixSim {
       myClockDomain.assertReset()
 
       // Simulate next 1k clock cycles
-      for(idx <- 0 to 99999) {
+      for(idx <- 0 to 199999) {
     
         if(idx > 1) { myClockDomain.deassertReset() }
 
         myClockDomain.waitRisingEdge()
 
-        if(dut.axi.qspi0.io.axi.arw.valid.toBoolean ||
-           dut.axi.qspi0.io.axi.r.valid.toBoolean ||
-           dut.axi.qspi0.io.axi.r.ready.toBoolean ||
-           dut.axi.qspi0.io.axi.arw.ready.toBoolean ||
-           dut.axi.qspi0.io.axi.w.valid.toBoolean)
+        //if(dut.axi.qspi0.io.apb.PADDR.toLong == 0 || dut.axi.qspi0.io.apb.PADDR.toLong == 4)
+        //if(dut.axi.qspi0.io.apb.PENABLE.toBoolean)
+        if(dut.axi.qspi0.qspiAccessFlag.toBoolean || dut.axi.qspi0.qspiCtrlWord.toLong != 0 
+          || dut.axi.qspi0.phase.toBigInt > 4)
+        //if(dut.axi.qspi0.io.axi.arw.valid.toBoolean ||
+        //   dut.axi.qspi0.io.axi.r.valid.toBoolean ||
+        //   dut.axi.qspi0.io.axi.r.ready.toBoolean ||
+        //   dut.axi.qspi0.io.axi.arw.ready.toBoolean ||
+        //   dut.axi.qspi0.io.axi.w.valid.toBoolean)
            {
 
-            println("[cycle: %8d, pc: %08x, instr: %08x]\r\nqspi0: arw.valid = %s, arw.ready = %s, axi.r.valid = %s, axi.r.ready = %s, arw.write = %s, io.arw.addr = %08x/%08x, arw.len = %08x, arw.size = %08x, lenBurst = %08x, phase = %d, r.data = %08x".format(
+            println("[cycle: %8d, pc: %08x, instr: %08x]\r\nqspi0: arw.valid = %s, arw.ready = %s, axi.r.valid = %s, axi.r.ready = %s, arw.write = %s, io.arw.addr = %08x/%08x, arw.len = %08x, arw.size = %08x, lenBurst = %08x, phase = %d, r.data = %08x, apb.PADDR = %08x, apb.PWDATA = %08x, apb.PWRITE = %s, spiCtrlWord = %08x, qspiEraseSector = %08x".format(
               idx,
               dut.axi.core.cpu.lastStagePc.toLong,
               dut.axi.core.cpu.lastStageInstruction.toLong,
@@ -846,7 +857,12 @@ object BrieyForKarnixSim {
               dut.axi.qspi0.arw.size.toLong,
               dut.axi.qspi0.lenBurst.toLong,
               dut.axi.qspi0.phase.toBigInt,
-              dut.axi.qspi0.io.axi.r.data.toLong
+              dut.axi.qspi0.io.axi.r.data.toLong,
+              dut.axi.qspi0.io.apb.PADDR.toLong,
+              dut.axi.qspi0.io.apb.PWDATA.toLong,
+              dut.axi.qspi0.io.apb.PWRITE.toBoolean,
+              dut.axi.qspi0.qspiCtrlWord.toLong,
+              dut.axi.qspi0.qspiEraseSector.toLong
             ))
         }
       }
