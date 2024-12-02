@@ -47,7 +47,7 @@ IOBUF PORT "io_gpio[6]" PULLMODE=NONE DRIVE=16;
 LOCATE COMP "io_gpio[7]" SITE "L5";		# HUB_07 
 IOBUF PORT "io_gpio[7]" IO_TYPE=LVCMOS33;
 IOBUF PORT "io_gpio[7]" PULLMODE=NONE DRIVE=16;
-LOCATE COMP "io_gpio[8]" SITE "N1";		# HUB_08 
+LOCATE COMP "io_gpio[8]" SITE "M9";		# HUB_08 - N1 is used by QSPI0_SCLK 
 IOBUF PORT "io_gpio[8]" IO_TYPE=LVCMOS33;
 IOBUF PORT "io_gpio[8]" PULLMODE=NONE DRIVE=16;
 LOCATE COMP "io_gpio[9]" SITE "P2";		# HUB_09 
@@ -280,4 +280,17 @@ IOBUF PORT "io_hdmi_tmds_clk_p" IO_TYPE=LVCMOS33;
 LOCATE COMP "io_hdmi_tmds_clk_n" SITE "C12";
 IOBUF PORT "io_hdmi_tmds_clk_n" IO_TYPE=LVCMOS33;
 
+
+LOCATE COMP "io_qspi0_cs" SITE "N8";
+IOBUF PORT "io_qspi0_cs" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_qspi0_sclk" SITE "N1"; // GPIO_08, should be M9
+IOBUF PORT "io_qspi0_sclk" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_qspi0_io0" SITE "T8";
+IOBUF PORT "io_qspi0_io0" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_qspi0_io1" SITE "T7";
+IOBUF PORT "io_qspi0_io1" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_qspi0_io2" SITE "M7";
+IOBUF PORT "io_qspi0_io2" IO_TYPE=LVCMOS33;
+LOCATE COMP "io_qspi0_io3" SITE "N7";
+IOBUF PORT "io_qspi0_io3" IO_TYPE=LVCMOS33;
 
