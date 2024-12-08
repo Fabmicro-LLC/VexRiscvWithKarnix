@@ -26,7 +26,7 @@ case class QSPIInterface(g : QSPILayout) extends Bundle with IMasterSlave{
 
 
 object QSPISendSPIPhase extends SpinalEnum{
-  val IDLE, START, SEND, DONE = newElement()
+  val IDLE, SEND, DONE = newElement()
 }
 
 case class QSPISendSPI(qspiLayout : QSPILayout) extends Component {
@@ -36,17 +36,19 @@ case class QSPISendSPI(qspiLayout : QSPILayout) extends Component {
     val ready = out Bool()
     val data = in UInt(32 bits) 
     val len_bits = in UInt(5 bits) 
+    val data_in = out Bits(32 bits) 
   }
 
   import QSPISendSPIPhase._
 
   val cur_bit     = Reg(UInt(5 bits))
   val phase       = RegInit(IDLE)
+  val data_in     = Reg(Bits(32 bits))
 
   io.qspi.cs := True 
   io.qspi.sclk := False
+  io.data_in := data_in
 
-  val miso = RegNext(io.qspi.io1)
   val ready = Reg(Bool()) init (False)
 
   io.ready := ready 
@@ -54,18 +56,16 @@ case class QSPISendSPI(qspiLayout : QSPILayout) extends Component {
   when(io.valid) {
     switch(phase) {
       is(IDLE) {
-        phase := START 
-        ready := False
-      }
-      is(START) {
         io.qspi.cs := False
-        cur_bit := io.len_bits
         phase := SEND
+        ready := False
+        cur_bit := io.len_bits
       }
       is(SEND) {
         io.qspi.cs := False
         io.qspi.sclk := !ClockDomain.current.readClockWire
         io.qspi.io0 := io.data(cur_bit)
+        data_in := data_in(30 downto 0) ## io.qspi.io1
         cur_bit := cur_bit - 1
         when(cur_bit === 0) {
           phase := DONE 
@@ -106,7 +106,6 @@ case class QSPISendCMD_QPI(qspiLayout : QSPILayout) extends Component {
   io.qspi.cs := True 
   io.qspi.sclk := False
 
-  val miso = RegNext(io.qspi.io1)
   val ready = Reg(Bool()) init (False)
 
   io.ready := ready 
@@ -254,7 +253,7 @@ case class QSPIReadWord32(qspiLayout : QSPILayout) extends Component {
 
 
 object Axi4ToQSPIPhase extends SpinalEnum{
-  val INIT1, INIT2, INIT3, INIT4, SETUP, WRITE_SKIP, SPI_CMD_READ, QPI_CMD_READ, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, QPI_READ_RESPONSE, RESPONSE, SPI_CMD_ERASE4K, SPI_CMD_ERASE4K_WEL = newElement()
+  val INIT1, INIT2, INIT3, INIT4, SETUP, WRITE_SKIP, SPI_CMD_READ, QPI_CMD_READ, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, QPI_READ_RESPONSE, RESPONSE, SPI_CMD_ERASE4K, SPI_CMD_ERASE4K_WEL, SPI_CMD_STATUS, SPI_CMD_READ_STATUS, SPI_CMD_READ_STATUS_RESPONSE = newElement()
 }
 
 object Axi4SharedToQSPI {
@@ -299,11 +298,13 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
 
   val busCtrl = Apb3SlaveFactory(io.apb)
   val qspiCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 0) init(0)
-  val qspiCtrlWriteEnabled = qspiCtrlWord(31)
-  val qspiCtrlCMDErase = qspiCtrlWord(30)
-  val qspiEraseSector = busCtrl.createReadAndWrite(Bits(32 bits), address = 4)
-  //val qspiAccessFlag = io.apb.PENABLE && io.apb.PSEL(0) && io.apb.PADDR === 0 
-  val qspiAccessFlag = io.apb.PENABLE && io.apb.PSEL(0) 
+  val qspiCtrlWriteEnabled = qspiCtrlWord(31) // Enables erase/write operations
+  val qspiCtrlCMDErase = qspiCtrlWord(30)     // Set 1 to initiate 4K Secotr Erase request 
+  val qspiCtrlCMDStatus = qspiCtrlWord(29)    // Set 1 to initiate Status Req 1 request
+  val qspiCtrlProgress = qspiCtrlWord(16)     // If 1 - command is in progress
+  val qspiCtrlStatus = qspiCtrlWord(7 downto 0) // Holds the result of qspiCtrlCMDStatus command
+  val qspiEraseSector = busCtrl.createReadAndWrite(Bits(32 bits), address = 4) // Write here address of the sector to be erased
+  val qspiAccessFlag = io.apb.PENABLE && io.apb.PSEL(0)  // Used in simulation only 
 
   val phase      = RegInit(INIT1)
   val lenBurst   = Reg(cloneOf(io.axi.arw.len))
@@ -319,7 +320,6 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
   io.axi.r.valid    := False
   io.axi.r.resp     := Axi4.resp.OKAY
   io.axi.r.id       := arw.id
-//  io.axi.r.data     := readData
   io.axi.r.data     := 0
   io.axi.r.last     := isEndBurst && !arw.write
 
@@ -351,42 +351,46 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
   val sm = new Area {
     switch(phase){
       is (INIT1) {
-        spi_send.io.qspi <> io.qspi
-        spi_send.io.data := 0x50 // Set Write Enable bit to alow writes to Status Regs
-        spi_send.io.len_bits := 8 - 1
-        spi_send.io.valid := True
-        when(spi_send.io.ready) {
+        when(!spi_send.io.ready) {
+          spi_send.io.qspi <> io.qspi
+          spi_send.io.data := 0x50 // Set Write Enable bit to alow writes to Status Regs
+          spi_send.io.len_bits := 8 - 1
+          spi_send.io.valid := True
+        } otherwise {
           phase := INIT2 
         }
       }
       is (INIT2) {
-        spi_send.io.qspi <> io.qspi
-        // Below settings are for QPI mode which is not good for FPGAs: QPI blocks bitstream read
-        // Status Reg-1 and 2: (SRP0:0, SEC:0, TB:1, BP2-0:011, WEL/BUSY:00)
-        //                     (SUS:0, CMP:0, LB3-1:000, R:0, QE:1, SRP1:0)
-        spi_send.io.data := 0x012c02
-        spi_send.io.len_bits := 24 - 1
-        spi_send.io.valid := True
-        when(spi_send.io.ready) {
+        when(!spi_send.io.ready) {
+          spi_send.io.qspi <> io.qspi
+          // Below settings are for QPI mode which is not good for FPGAs: QPI blocks bitstream read
+          // Status Reg-1 and 2: (SRP0:0, SEC:0, TB:1, BP2-0:011, WEL/BUSY:00)
+          //                     (SUS:0, CMP:0, LB3-1:000, R:0, QE:1, SRP1:0)
+          spi_send.io.data := 0x012c02
+          spi_send.io.len_bits := 24 - 1
+          spi_send.io.valid := True
+        } otherwise {
           phase := INIT3 
         }
       }
       is (INIT3) {
-        spi_send.io.qspi <> io.qspi
-        spi_send.io.data := 0x04 // Write Disable
-        spi_send.io.len_bits := 8 - 1
-        spi_send.io.valid := True
-        when(spi_send.io.ready) {
-          //phase := INIT4 // Switch to QPI mode
+        when(!spi_send.io.ready) {
+          spi_send.io.qspi <> io.qspi
+          spi_send.io.data := 0x04 // Write Disable
+          spi_send.io.len_bits := 8 - 1
+          spi_send.io.valid := True
+           //phase := INIT4 // Switch to QPI mode
+        } otherwise {
           phase := SETUP // Stay in SPI mode 
         }
       }
       is (INIT4) {
-        spi_send.io.qspi <> io.qspi
-        spi_send.io.data := 0x38 // Switch to QPI mode 
-        spi_send.io.len_bits := 8 - 1 
-        spi_send.io.valid := True
-        when(spi_send.io.ready) {
+        when(!spi_send.io.ready) {
+          spi_send.io.qspi <> io.qspi
+          spi_send.io.data := 0x38 // Switch to QPI mode 
+          spi_send.io.len_bits := 8 - 1 
+          spi_send.io.valid := True
+        } otherwise {
           phase := SETUP
         }
       }
@@ -394,7 +398,6 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
         arw       := io.axi.arw
         lenBurst  := io.axi.arw.len
         when(io.axi.arw.valid) {
-          //addr := arw.addr
           io.axi.arw.ready := True // address accepted
           when(io.axi.arw.write) {
             phase := WRITE_SKIP 
@@ -408,10 +411,37 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
         } otherwise {
           when(qspiCtrlCMDErase && qspiCtrlWriteEnabled) {
             phase := SPI_CMD_ERASE4K_WEL // Erase set WEL
-            qspiCtrlCMDErase := False 
-            qspiCtrlWriteEnabled := False
+            qspiCtrlProgress := True
+          }
+          when(qspiCtrlCMDStatus) {
+            phase := SPI_CMD_STATUS // Request Status Req 1 
+            qspiCtrlProgress := True
           }
         }
+      }
+      is(SPI_CMD_STATUS){
+        spi_cmd.io.valid := True 
+        spi_cmd.io.qspi <> io.qspi
+        spi_cmd.io.data := U(0x05)
+        spi_cmd.io.len_cycles := 8 - 1 // 8 bits holding cmd
+        when(spi_cmd.io.ready) {
+          phase := SPI_CMD_READ_STATUS 
+        }
+      }
+      is(SPI_CMD_READ_STATUS){
+        when(!spi_send.io.ready) {
+          spi_send.io.valid := True 
+          spi_send.io.qspi <> io.qspi
+          spi_send.io.len_bits := 8 - 1 
+        } otherwise {
+          phase := SPI_CMD_READ_STATUS_RESPONSE
+        }
+      }
+      is(SPI_CMD_READ_STATUS_RESPONSE){
+        phase := SETUP
+        qspiCtrlProgress := False
+        qspiCtrlCMDStatus := False 
+        qspiCtrlStatus := spi_send.io.data_in(7 downto 0)
       }
       is(SPI_CMD_ERASE4K_WEL){
         when(!spi_cmd.io.ready) {
@@ -431,6 +461,9 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           spi_cmd.io.valid := True 
         } otherwise {
           phase := SETUP
+          qspiCtrlProgress := False
+          qspiCtrlCMDErase := False 
+          qspiCtrlWriteEnabled := False
         }
       }
       is (WRITE_SKIP) {
@@ -441,8 +474,7 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
         when(io.axi.w.valid) {
           arw.addr   := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
         }
-        //when(io.axi.w.last || arw.len === 0) {
-        when(io.axi.w.last) {
+        when(io.axi.w.last || arw.len === 0) {
           phase := RESPONSE
         }
       }
@@ -479,17 +511,6 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           qpi_read.io.valid := True
         } otherwise {
           io.qspi.cs := False
-          // Revers byte order
-          //readData(31 downto 24) := qpi_read.io.data(7 downto 0)
-          //readData(23 downto 16) := qpi_read.io.data(15 downto 8)
-          //readData(15 downto 8) := qpi_read.io.data(23 downto 16)
-          //readData(7 downto 0) := qpi_read.io.data(31 downto 24)
-
-          // For debug: always return "C.JR X1" (RET) opcode 
-          //readData(31 downto 24) := 0x80
-          //readData(23 downto 16) := 0x82
-          //readData(15 downto 8) := 0x80
-          //readData(7 downto 0) := 0x82
           phase := QPI_READ_RESPONSE
         }
       }

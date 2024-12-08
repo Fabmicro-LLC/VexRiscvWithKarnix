@@ -518,10 +518,18 @@ void cga_video_demo(void) {
 #endif
 
 void test_nor_erase(void) {
-	uint32_t erase_addr = 0x00ffffff; // last byte in NOR flash
-	printf("Erasing NOR sector: %d\r\n", erase_addr >> 12);
-	qspi_erase_sector(erase_addr); 
-	delay_us(1000000);
+	uint32_t erase_addr = 0x00ff0000; // last byte in NOR flash
+
+	for(int i = 0; i < 8; i++) {
+		printf("Erasing NOR sector: %d\r\n", erase_addr >> 12);
+		qspi_erase_sector(erase_addr); 
+		while(qspi_get_status() & QSPI_DEVICE_STATUS_BUSY);
+		printf("NOR Status Reg 1 = 0x%08x\r\n", qspi_get_status());
+		delay_us(1000000);
+		erase_addr += 4096;
+	}
+
+	printf("NOR erase test done!\r\n");
 }
 
 
