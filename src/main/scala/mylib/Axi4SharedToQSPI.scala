@@ -253,7 +253,12 @@ case class QSPIReadWord32(qspiLayout : QSPILayout) extends Component {
 
 
 object Axi4ToQSPIPhase extends SpinalEnum{
-  val INIT1, INIT2, INIT3, INIT4, SETUP, WRITE_SKIP, SPI_CMD_READ, QPI_CMD_READ, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEATE, QPI_READ_RESPONSE, RESPONSE, SPI_CMD_ERASE4K, SPI_CMD_ERASE4K_WEL, SPI_CMD_STATUS, SPI_CMD_READ_STATUS, SPI_CMD_READ_STATUS_RESPONSE = newElement()
+  val INIT1, INIT2, INIT3, INIT4, SETUP,
+      SPI_CMD_PROGRAM_WEL, SPI_CMD_PROGRAM, SPI_PROGRAM, SPI_PROGRAM_RESPONSE,
+      SPI_CMD_READ, QPI_CMD_READ, QPI_CMD_READ_SETUP, QPI_READ, QPI_READ_REPEAT, QPI_READ_RESPONSE,
+      SPI_CMD_ERASE4K, SPI_CMD_ERASE4K_WEL,
+      SPI_CMD_STATUS, SPI_CMD_READ_STATUS, SPI_CMD_READ_STATUS_RESPONSE
+      = newElement()
 }
 
 object Axi4SharedToQSPI {
@@ -299,9 +304,10 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
   val busCtrl = Apb3SlaveFactory(io.apb)
   val qspiCtrlWord = busCtrl.createReadAndWrite(Bits(32 bits), address = 0) init(0)
   val qspiCtrlWriteEnabled = qspiCtrlWord(31) // Enables erase/write operations
-  val qspiCtrlCMDErase = qspiCtrlWord(30)     // Set 1 to initiate 4K Secotr Erase request 
-  val qspiCtrlCMDStatus = qspiCtrlWord(29)    // Set 1 to initiate Status Req 1 request
-  val qspiCtrlProgress = qspiCtrlWord(16)     // If 1 - command is in progress
+  val qspiCtrlCMDErase = qspiCtrlWord(30)     // Set True to initiate 4K Secotr Erase request 
+  val qspiCtrlCMDStatus = qspiCtrlWord(29)    // Set True to initiate Status Req 1 request
+  val qspiCtrlCMDProgram = qspiCtrlWord(28)   // Is True when programming cycle is in progress 
+  val qspiCtrlProgress = qspiCtrlWord(16)     // Is True when any command is in progress
   val qspiCtrlStatus = qspiCtrlWord(7 downto 0) // Holds the result of qspiCtrlCMDStatus command
   val qspiEraseSector = busCtrl.createReadAndWrite(Bits(32 bits), address = 4) // Write here address of the sector to be erased
   val qspiAccessFlag = io.apb.PENABLE && io.apb.PSEL(0)  // Used in simulation only 
@@ -399,18 +405,17 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
         lenBurst  := io.axi.arw.len
         when(io.axi.arw.valid) {
           io.axi.arw.ready := True // address accepted
-          when(io.axi.arw.write) {
-            phase := WRITE_SKIP 
-            io.qspi.sclk := False 
-            io.qspi.cs := False
-            io.qspi.io0 := True 
+          when(io.axi.arw.write && qspiCtrlWriteEnabled) {
+            phase := SPI_CMD_PROGRAM_WEL // Program, set WEL first
+            qspiCtrlProgress := True
+            qspiCtrlCMDProgram := True
           } otherwise {
             //phase := QPI_CMD_READ_SETUP 
             phase := SPI_CMD_READ
           }
         } otherwise {
           when(qspiCtrlCMDErase && qspiCtrlWriteEnabled) {
-            phase := SPI_CMD_ERASE4K_WEL // Erase set WEL
+            phase := SPI_CMD_ERASE4K_WEL // Erase, set WEL first
             qspiCtrlProgress := True
           }
           when(qspiCtrlCMDStatus) {
@@ -443,6 +448,52 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
         qspiCtrlCMDStatus := False 
         qspiCtrlStatus := spi_send.io.data_in(7 downto 0)
       }
+      is(SPI_CMD_PROGRAM_WEL){
+        when(!spi_cmd.io.ready) {
+          spi_cmd.io.valid := True 
+          spi_cmd.io.qspi <> io.qspi
+          spi_cmd.io.data := U(0x06)
+          spi_cmd.io.len_cycles := 8 - 1 // 8 bits holding cmd
+        } otherwise {
+          phase := SPI_CMD_PROGRAM // Go to program cycle
+        }
+      }
+      is(SPI_CMD_PROGRAM){
+        spi_cmd.io.valid := True 
+        spi_cmd.io.qspi <> io.qspi
+        spi_cmd.io.data := (U(0x02).resize(8) ## arw.addr(23 downto 0)).asUInt // Send "Program" followed by 24 bit address 
+        spi_cmd.io.len_cycles := 32 - 1 // 32 bits holding cmd and address 
+        when(spi_cmd.io.ready) {
+          phase := SPI_PROGRAM // Go to one data word transmit 
+        }
+      }
+      is(SPI_PROGRAM){ // Program one 32 data word at a time
+        spi_send.io.qspi <> io.qspi
+        spi_send.io.len_bits := 32 - 1 
+        spi_send.io.data(31 downto 24) := io.axi.w.data(7 downto 0).asUInt
+        spi_send.io.data(23 downto 16) := io.axi.w.data(15 downto 8).asUInt
+        spi_send.io.data(15 downto 8) := io.axi.w.data(23 downto 16).asUInt
+        spi_send.io.data(7 downto 0) := io.axi.w.data(31 downto 24).asUInt
+        when(!spi_send.io.ready) {
+          spi_send.io.valid := True 
+        } otherwise {
+          io.axi.w.ready := True 
+          arw.addr := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
+          when(io.axi.w.last || arw.len === 0){
+            phase := SPI_PROGRAM_RESPONSE
+          } otherwise {
+            spi_send.io.valid := True 
+          }
+        }
+      }
+      is(SPI_PROGRAM_RESPONSE){
+        io.axi.b.valid := True
+        when(io.axi.b.ready){
+          qspiCtrlProgress := False
+          qspiCtrlCMDProgram := False 
+          phase := SETUP
+        }
+      }
       is(SPI_CMD_ERASE4K_WEL){
         when(!spi_cmd.io.ready) {
           spi_cmd.io.qspi <> io.qspi
@@ -464,18 +515,6 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           qspiCtrlProgress := False
           qspiCtrlCMDErase := False 
           qspiCtrlWriteEnabled := False
-        }
-      }
-      is (WRITE_SKIP) {
-        io.qspi.sclk := True //!ClockDomain.current.readClockWire
-        io.qspi.cs := False
-        io.axi.w.ready := io.axi.w.valid & arw.write
-        // If write, increment beat address
-        when(io.axi.w.valid) {
-          arw.addr   := Axi4.incr(arw.addr, arw.burst, arw.len, arw.size, 4)
-        }
-        when(io.axi.w.last || arw.len === 0) {
-          phase := RESPONSE
         }
       }
       is (QPI_CMD_READ_SETUP){
@@ -529,11 +568,11 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
             lenBurst := lenBurst - 1
             qpi_read.io.qspi <> io.qspi
             qpi_read.io.valid := False
-            phase := QPI_READ_REPEATE
+            phase := QPI_READ_REPEAT
           }
         }
       }
-      is (QPI_READ_REPEATE){
+      is (QPI_READ_REPEAT){
           qpi_read.io.qspi <> io.qspi
           qpi_read.io.valid := True
           phase := QPI_READ 
@@ -553,19 +592,6 @@ case class Axi4SharedToQSPI(addressAxiWidth: Int, dataWidth: Int, idWidth: Int, 
           phase := QPI_READ // Read performed in 4-bit chunks same as in QPI mode
         }
       }
-      default { // RESPONSE, UNSUPPORTED
-        when(arw.write){
-          io.axi.b.valid := True
-          io.axi.w.ready := io.axi.w.valid & arw.write
-          when(io.axi.b.ready){
-            phase := SETUP
-          }
-        } otherwise {
-          io.axi.r.valid := True // Read OK
-          phase := SETUP
-        }
-      }
-
     }
   }
 }

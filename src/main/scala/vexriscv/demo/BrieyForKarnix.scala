@@ -595,7 +595,7 @@ case class BrieyForKarnixTopLevel() extends Component{
     }
 
     val briey = new BrieyForKarnix(BrieyForKarnixConfig.default.copy(
-		axiFrequency = 60 MHz, 
+		axiFrequency = 58.3 MHz, 
 		onChipRamSize = 72 kB , 
 		onChipRamHexFile = "BrieyForKarnixTopLevel_random.hex"
 		//onChipRamHexFile = "src/main/c/briey/karnix_extended/build/karnix_extended.hex"
@@ -781,6 +781,7 @@ object BrieyForKarnixSim {
       dut.axi.qspi0.io.axi.r.data.simPublic()
       dut.axi.qspi0.io.axi.w.valid.simPublic()
       dut.axi.qspi0.io.axi.w.ready.simPublic()
+      dut.axi.qspi0.io.axi.w.data.simPublic()
       dut.axi.qspi0.io.axi.r.data.simPublic()
       dut.axi.qspi0.arw.addr.simPublic()
       dut.axi.qspi0.arw.len.simPublic()
@@ -842,7 +843,7 @@ object BrieyForKarnixSim {
         //   dut.axi.qspi0.io.axi.w.valid.toBoolean)
            {
 
-            println("[cycle: %8d, pc: %08x, instr: %08x]\r\nqspi0: arw.valid = %s, arw.ready = %s, axi.r.valid = %s, axi.r.ready = %s, arw.write = %s, io.arw.addr = %08x/%08x, arw.len = %08x, arw.size = %08x, lenBurst = %08x, phase = %d, r.data = %08x, apb.PADDR = %08x, apb.PWDATA = %08x, apb.PWRITE = %s, spiCtrlWord = %08x, qspiEraseSector = %08x".format(
+            println("[cycle: %8d, pc: %08x, instr: %08x]\r\nqspi0: arw.valid = %s, arw.ready = %s, axi.r.valid = %s, axi.r.ready = %s, arw.write = %s, io.arw.addr = %08x/%08x, arw.len = %08x, arw.size = %08x, lenBurst = %08x, phase = %d, r.data = %08x, w.data = %08x, apb.PADDR = %08x, apb.PWDATA = %08x, apb.PWRITE = %s, spiCtrlWord = %08x, qspiEraseSector = %08x".format(
               idx,
               dut.axi.core.cpu.lastStagePc.toLong,
               dut.axi.core.cpu.lastStageInstruction.toLong,
@@ -858,6 +859,7 @@ object BrieyForKarnixSim {
               dut.axi.qspi0.lenBurst.toLong,
               dut.axi.qspi0.phase.toBigInt,
               dut.axi.qspi0.io.axi.r.data.toLong,
+              dut.axi.qspi0.io.axi.w.data.toLong,
               dut.axi.qspi0.io.apb.PADDR.toLong,
               dut.axi.qspi0.io.apb.PWDATA.toLong,
               dut.axi.qspi0.io.apb.PWRITE.toBoolean,

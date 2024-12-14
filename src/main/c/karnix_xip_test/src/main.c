@@ -518,24 +518,51 @@ void cga_video_demo(void) {
 #endif
 
 void test_nor_erase(void) {
-	uint32_t erase_addr = 0x00ff0000; // last byte in NOR flash
+	uint32_t erase_addr = 0x00f00000; // Somewhere in the NOR flash 
+	uint32_t erase_size = 0x100000; // 1 MB
 
-	for(int i = 0; i < 8; i++) {
-		printf("Erasing NOR sector: %d\r\n", erase_addr >> 12);
-		qspi_erase_sector(erase_addr); 
+	uint32_t t0 = get_mtime();
+	for(uint32_t addr = erase_addr; addr < erase_addr + erase_size;  addr += 4096) {
+		printf("Erasing NOR sector: %d @ 0x%08x\r\n", addr >> 12, addr);
+		qspi_erase_sector(addr); 
 		while(qspi_get_status() & QSPI_DEVICE_STATUS_BUSY);
 		printf("NOR Status Reg 1 = 0x%08x\r\n", qspi_get_status());
-		delay_us(1000000);
-		erase_addr += 4096;
 	}
+	uint32_t t1 = get_mtime();
 
-	printf("NOR erase test done!\r\n");
+	printf("NOR erasing  %d bytes takes %d us\r\n", erase_size, t1-t0);
+
+	delay_us(1000000);
+}
+
+
+void test_nor_write(void) {
+	uint32_t write_addr = 0x00f00000; // Somewhere in the NOR flash 
+	uint32_t write_size = 0x100000; // 1 MB
+	volatile uint32_t* v = (uint32_t*)(QSPI_MEMORY_ADDRESS + write_addr);
+
+	printf("Programming NOR at 0x%08x\r\n", v);
+
+	qspi_write_enable();
+
+	uint32_t t0 = get_mtime();
+	for(int i = 0; i < write_size/4; i++) {
+		*v++ = i;
+		while(qspi_get_status() & QSPI_DEVICE_STATUS_BUSY);
+	}
+	uint32_t t1 = get_mtime();
+
+	qspi_write_disable();
+
+	printf("NOR write of %d bytes takes %d us\r\n", write_size, t1-t0);
+
+	delay_us(5000000);
 }
 
 
 void test_nor_xip(void) {
 
-	volatile uint32_t* v = (uint32_t*)0xA0800000;
+	volatile uint32_t* v = (uint32_t*)(QSPI_MEMORY_ADDRESS + 0x800000);
 	//volatile uint32_t* v = (uint32_t*)0x90001000;
 	//volatile uint32_t* v = (uint32_t*)0x90800000;
 	//for(int i = 0; i < 100*1024; i++)
@@ -569,10 +596,12 @@ void main() {
 
 	init_sbrk(NULL, 0); // Initialize heap for malloc to use on-chip RAM
 
+	test_nor_write();
+
 	delay_us(2000000); // Wait for FCLK to settle
 
 	test_nor_erase();
-
+	test_nor_write();
 	test_nor_xip();
 
 	if(deadbeef != 0) {
